@@ -174,9 +174,14 @@
 ### 1.17 自定义类加载器 
 
 > 要创建用户自定义的类加载器，只需要扩展java.lang.ClassLoader类，然后覆盖它的findClass(String name)方法即可，该方法根据参数指定的类的名字，返回对应的Class对象的引用。
+>
+> 需要指出的是，加载器之间的父子关系实际上指的是加载器对象之间的包含关系，而不是类之间的继承关系。一对父子加载器可能是同一个加载器类的两个实例，也可能不是。在子加载器对象中包装了一个父加载
+> 器对象。例如以下loader1和loader2 都是MyClassLoader类的实例，并且loader2包装了loader1,loader1是loader2的父加载器
 
 ```java
-
+ ClassLoader loader1 = new ClassLoader();
+ //参数loader1将作为loader2的父加载器
+ ClaaLoader loader2 = new ClassLoader(loader1);
 ```
 
 ### 1.18 命名空间
@@ -274,5 +279,5 @@
      }
 ```
 
-33
+36
 
