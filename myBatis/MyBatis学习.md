@@ -176,4 +176,270 @@ try (SqlSession session = sqlSessionFactory.openSession()) {
 
 ### 6.4 类型处理器(typeHandlers)
 
-240
+>  无论是 MyBatis 在预处理语句（PreparedStatement）中设置一个参数时，还是从结果集中取出一个值时，          都会用类型处理器将获取的值以合适的方式转换成 Java 类型。下表描述了一些默认的类型处理器。 ###
+
+### 6.5 对象工厂
+
+>  MyBatis 每次创建结果对象的新实例时，它都会使用一个对象工厂（ObjectFactory）实例来完成。          默认的对象工厂需要做的仅仅是实例化目标类，要么通过默认构造方法，要么在参数映射存在的时候通过参数构造方法来实例化。如果想覆盖对象工厂的默认行为，则可以通过创建自己的对象工厂来实现。比如： 
+
+### 6.6 插件
+
+> ​          MyBatis 允许你在已映射语句执行过程中的某一点进行拦截调用。默认情况下，MyBatis 允许使用插件来拦截的方法调用包括：        
+>
+> - Executor(update, query, flushStatements, commit, rollback, getTransaction, close,isClosed)          
+> - ParameterHandler(getParameterObject, setParameters)          
+> - ResultSetHandler(handleResultSets, handleOutputParameters)          
+> - StatementHandler(prepare, parameterize, batch, update, query)          
+>
+> 这些类中方法的细节可以通过查看每个方法的签名来发现，或者直接查看 MyBatis 发行包中的源代码。          如果你想做的不仅仅是监控方法的调用，那么你最好相当了解要重写的方法的行为。          因为如果在试图修改或重写已有方法的行为的时候，你很可能在破坏 MyBatis 的核心模块。          这些都是更低层的类和方法，所以使用插件的时候要特别当心。
+
+### 6.7 环境配置
+
+> ​          MyBatis 可以配置成适应多种环境，这种机制有助于将 SQL 映射应用于多种数据库之中，现实情况下有多种理由需要这么做。例如，开发、测试和生产环境需要有不同的配置；或者想在具有相同 Schema 的多个生产数据库中使用相同的 SQL 映射。有许多类似的使用场景。
+>
+> ​          **不过要记住：尽管可以配置多个环境，但每个 SqlSessionFactory实例只能选择一种环境。**        
+>
+> ​          所以，如果你想连接两个数据库，就需要创建两个 SqlSessionFactory实例，每个数据库对应一个。而如果是三个数据库，就需要三个实例，依此类推，记起来很简单：        
+>
+> - **每个数据库对应一个 SqlSessionFactory 实例**          
+>
+> ​          为了指定创建哪种环境，只要将它作为可选的参数传递给SqlSessionFactoryBuilder 即可。可以接受环境配置的两个方法签名是：        
+
+```java
+SqlSessionFactory factory = new SqlSessionFactoryBuilder().build(reader, environment);
+SqlSessionFactory factory = new SqlSessionFactoryBuilder().build(reader, environment, properties);
+```
+
+>  如果忽略了环境参数，那么默认环境将会被加载，如下所示：         
+
+```java
+SqlSessionFactory factory = new SqlSessionFactoryBuilder().build(reader);
+SqlSessionFactory factory = new SqlSessionFactoryBuilder().build(reader, properties);
+```
+
+>  环境元素定义了如何配置环境。         
+
+```xml
+    <environments default="development">
+        <environment id="development">
+            <transactionManager type="JDBC"/>
+            <!-- 配置数据库连接池-->
+            <dataSource type="POOLED">
+                <property name="driver" value="${db.driver}"/>
+                <property name="url" value="${db.url}"/>
+                <property name="username" value="${db.username}"/>
+                <property name="password" value="${db.password}"/>
+            </dataSource>
+        </environment>
+    </environments>
+```
+
+>  注意这里的关键点:
+>
+>  默认的环境和环境 ID 是自解释的，因此一目了然。你可以对环境随意命名，但一定要保证默认的环境 ID 要匹配其中一个环境 ID。 
+>
+> -  默认使用的环境 ID（比如：default="development"）。          
+> -  每个 environment 元素定义的环境 ID（比如：id="development"）。          
+> -  事务管理器的配置（比如：type="JDBC"）。          
+> -  数据源的配置（比如：type="POOLED"）。          
+
+#### 6.7.1 事务管理器
+
+>  如果你正在使用 Spring + MyBatis，则没有必要配置事务管理器，因为 Spring 模块会使用自带的管理器来覆盖前面的配置。         
+
+#### 6.7.2 数据源
+
+> dataSource 元素使用标准的 JDBC 数据源接口来配置 JDBC 连接对象的资源。
+>
+> - 许多 MyBatis 的应用程序会按示例中的例子来配置数据源。虽然这是可选的，但为了使用延迟加载，数据源是必须配置的。          
+>
+> 有三种内建的数据源类型（也就是 **type=”[UNPOOLED|POOLED|JNDI]”**）：
+
+#### 6.7.3 使用第三方数据源
+
+>  你可以通过实现接口 `org.apache.ibatis.datasource.DataSourceFactory` 来使用第三方数据源：         
+
+```java
+public interface DataSourceFactory {
+    void setProperties(Properties var1);
+
+    DataSource getDataSource();
+}
+```
+
+>  `org.apache.ibatis.datasource.unpooled.UnpooledDataSourceFactory` 可被用作父类来构建新的数据源适配器，比如下面这段插入 C3P0 数据源所必需的代码： 
+
+```java
+public class C3P0DataSourceFactory extends UnpooledDataSourceFactory {
+
+  public C3P0DataSourceFactory() {
+    this.dataSource = new ComboPooledDataSource();
+  }
+}
+```
+
+>  为了令其工作，记得为每个希望 MyBatis 调用的 setter 方法在配置文件中增加对应的属性。        下面是一个可以连接至 PostgreSQL 数据库的例子： 
+
+```xml
+<dataSource type="org.myproject.C3P0DataSourceFactory">
+  <property name="driver" value="org.postgresql.Driver"/>
+  <property name="url" value="jdbc:postgresql:mydb"/>
+  <property name="username" value="postgres"/>
+  <property name="password" value="root"/>
+</dataSource>
+```
+
+### 6.8 数据库厂商标识(databaseIdProvider)
+
+>  MyBatis 可以根据不同的数据库厂商执行不同的语句，这种多厂商的支持是基于映射语句中的 `databaseId` 属性。MyBatis 会加载不带 `databaseId` 属性和带有匹配当前数据库 `databaseId` 属性的所有语句。          如果同时找到带有 `databaseId` 和不带 `databaseId` 的相同语句，则后者会被舍弃。为支持多厂商特性只要像下面这样在 mybatis-config.xml 文件中加入 `databaseIdProvider` 即可：         
+
+```xml
+<databaseIdProvider type="DB_VENDOR">
+  <property name="SQL Server" value="sqlserver"/>
+  <property name="DB2" value="db2"/>
+  <property name="Oracle" value="oracle" />
+</databaseIdProvider>
+```
+
+### 6.9 映射器(Mappers)
+
+>  既然 MyBatis 的行为已经由上述元素配置完了，我们现在就要定义 SQL 映射语句了。但是首先我们需要告诉 MyBatis 到哪里去找到这些语句。Java 在自动查找这方面没有提供一个很好的方法，所以最佳的方式是告诉 MyBatis 到哪里去找映射文件。你可以使用相对于类路径的资源引用，或完全限定资源定位符（包括 `file:///` 的 URL），或类名和包名等。例如：         
+
+```xml
+<!-- 使用相对于类路径的资源引用 -->
+<mappers>
+  <mapper resource="org/mybatis/builder/AuthorMapper.xml"/>
+  <mapper resource="org/mybatis/builder/BlogMapper.xml"/>
+  <mapper resource="org/mybatis/builder/PostMapper.xml"/>
+</mappers>
+```
+
+```xml
+<!-- 将包内的映射器接口实现全部注册为映射器 
+     使用接口映射，需要将接口对应的.xml配置文件放在与接口同包下，并且名字相同
+-->
+<mappers>
+  <package name="org.mybatis.builder"/>
+</mappers>
+```
+
+```xml
+<!-- 使用映射器接口实现类的完全限定类名
+     使用接口映射，需要将接口对应的.xml配置文件放在与接口同包下，并且名字相同
+ -->
+<mappers>
+  <mapper class="org.mybatis.builder.AuthorMapper"/>
+  <mapper class="org.mybatis.builder.BlogMapper"/>
+  <mapper class="org.mybatis.builder.PostMapper"/>
+</mappers>
+```
+
+```xml
+<!-- 使用完全限定资源定位符（URL） -->
+<mappers>
+  <mapper url="file:///var/mappers/AuthorMapper.xml"/>
+  <mapper url="file:///var/mappers/BlogMapper.xml"/>
+  <mapper url="file:///var/mappers/PostMapper.xml"/>
+</mappers>
+```
+
+## 7. XML映射文件
+
+> SQL映射元素
+>
+> -   `cache` – 对给定命名空间的缓存配置。        
+> -  `cache-ref`– 对其他命名空间缓存配置的引用。        
+> -  `resultMap` – 是最复杂也是最强大的元素，用来描述如何从数据库结果集中来加载对象。        
+> -  ~~`parameterMap`   – 已被废弃！老式风格的参数映射。更好的办法是使用内联参数，此元素可能在将来被移除。文档中不会介绍此元素。~~                  
+> -   `sql`  – 可被其他语句引用的可重用语句块。        
+> -   `insert`   – 映射插入语句        
+> -  `update`  – 映射更新语句        
+> -   `delete`   – 映射删除语句        
+> -   `select` – 映射查询语句        
+
+### 7.1 select
+
+> select 标签中的属性。
+
+```xml
+<select
+  id="selectPerson"
+  parameterType="int"
+  parameterMap="deprecated"
+  resultType="hashmap"
+  resultMap="personResultMap"
+  flushCache="false"
+  useCache="true"
+  timeout="10"
+  fetchSize="256"
+  statementType="PREPARED"
+  resultSetType="FORWARD_ONLY"></select>
+```
+
+|       属性       |                             描述                             |
+| :--------------: | :----------------------------------------------------------: |
+|       `id`       |      在命名空间中唯一的标识符，可以被用来引用这条语句。      |
+| `parameterType`  | 将会传入这条语句的参数类的完全限定名或别名。这个属性是可选的，因为                MyBatis 可以通过类型处理器（TypeHandler） 推断出具体传入语句的参数，默认值为未设置（unset）。 |
+| ~~parameterMap~~ | ~~这是引用外部 parameterMap 的已经被废弃的方法。请使用内联参数映射和 parameterType 属性。~~ |
+|   `resultType`   | 从这条语句中返回的期望类型的类的完全限定名或别名。 注意如果返回的是集合，那应该设置为集合包含的类型，而不是集合本身。可以使用resultType 或 resultMap，但不能同时使用。 |
+|   `resultMap`    | 外部 resultMap 的命名引用。结果集的映射是 MyBatis 最强大的特性，如果你对其理解透彻，许多复杂映射的情形都能迎刃而解。可以使用resultMap 或 resultType，但不能同时使用。 |
+|   `flushCache`   | 将其设置为 true 后，只要语句被调用，都会导致本地缓存和二级缓存被清空，默认值：false。 |
+|    `useCache`    | 将其设置为 true 后，将会导致本条语句的结果被二级缓存缓存起来，默认值：对 select 元素为 true。 |
+|    `timeout`     | 这个设置是在抛出异常之前，驱动程序等待数据库返回请求结果的秒数。默认值为未设置（unset）（依赖驱动）。 |
+|   `fetchSize`    | 这是一个给驱动的提示，尝试让驱动程序每次批量返回的结果行数和这个设置值相等。默认值为未设置（unset）（依赖驱动）。 |
+| `statementType`  | STATEMENT，PREPARED 或 CALLABLE 中的一个。这会让 MyBatis 分别使用                Statement，PreparedStatement 或 CallableStatement，默认值：PREPARED。 |
+| `resultSetType`  | FORWARD_ONLY，SCROLL_SENSITIVE, SCROLL_INSENSITIVE 或                DEFAULT（等价于 unset） 中的一个，默认值为 unset （依赖驱动）。 |
+|   `databaseId`   | 如果配置了数据库厂商标识（databaseIdProvider），MyBatis会加载所有的不带 databaseId 或匹配当前 databaseId 的语句；如果带或者不带的语句都有，则不带的会被忽略。 |
+| `resultOrdered`  | 这个设置仅针对嵌套结果 select 语句适用：如果为true，就是假设包含了嵌套结果集或是分组，这样的话当返回一个主结果行的时候，就不会发生有对前面结果集的引用的情况。这就使得在获取嵌套的结果集的时候不至于导致内存不够用。默认值：`false`。 |
+|   `resultSets`   | 这个设置仅对多结果集的情况适用。它将列出语句执行后返回的结果集并给每个结果集一个名称，名称是逗号分隔的。 |
+
+### 7.2 insert,update 和 delete
+
+> 标签中的元素
+
+```xml
+<insert
+  id="insertAuthor"
+  parameterType="domain.blog.Author"
+  flushCache="true"
+  statementType="PREPARED"
+  keyProperty=""
+  keyColumn=""
+  useGeneratedKeys=""
+  timeout="20">
+
+<update
+  id="updateAuthor"
+  parameterType="domain.blog.Author"
+  flushCache="true"
+  statementType="PREPARED"
+  timeout="20">
+
+<delete
+  id="deleteAuthor"
+  parameterType="domain.blog.Author"
+  flushCache="true"
+  statementType="PREPARED"
+  timeout="20">
+```
+
+|        属性        |                             描述                             |
+| :----------------: | :----------------------------------------------------------: |
+|        `id`        |        命名空间中的唯一标识符，可被用来代表这条语句。        |
+|  `parameterType`   | 将要传入语句的参数的完全限定类名或别名。这个属性是可选的，因为 MyBatis 可以通过类型处理器推断出具体传入语句的参数，默认值为未设置（unset）。 |
+| ~~`parameterMap`~~ | ~~这是引用外部 parameterMap 的已经被废弃的方法。请使用内联参数映射和 parameterType 属性。~~ |
+|    `flushCache`    | 将其设置为 true 后，只要语句被调用，都会导致本地缓存和二级缓存被清空，默认值：true（对于 insert、update 和 delete 语句）。 |
+|     `timeout`      | 这个设置是在抛出异常之前，驱动程序等待数据库返回请求结果的秒数。默认值为未设置（unset）（依赖驱动）。 |
+|  `statementType`   | STATEMENT，PREPARED 或 CALLABLE 的一个。这会让 MyBatis 分别使用                Statement，PreparedStatement 或 CallableStatement，默认值：PREPARED。 |
+| `useGeneratedKeys` | （仅对 insert 和 update 有用）这会令 MyBatis 使用 JDBC 的                getGeneratedKeys 方法来取出由数据库内部生成的主键（比如：像 MySQL 和 SQL Server 这样的关系数据库管理系统的自动递增字段），默认值：false。 |
+|   `keyProperty`    | （仅对 insert 和 update 有用）唯一标记一个属性，MyBatis 会通过                getGeneratedKeys 的返回值或者通过 insert 语句的 selectKey 子元素设置它的键值，默认值：未设置（`unset`）。如果希望得到多个生成的列，也可以是逗号分隔的属性名称列表。 |
+|    `keyColumn`     | （仅对 insert 和 update 有用）通过生成的键值设置表中的列名，这个设置仅在某些数据库（像  PostgreSQL）是必须的，当主键列不是表中的第一列的时候需要设置。如果希望使用多个生成的列，也可以设置为逗号分隔的属性名称列表。 |
+|    `databaseId`    | 如果配置了数据库厂商标识（databaseIdProvider），MyBatis 会加载所有的不带databaseId 或匹配当前 databaseId 的语句；如果带或者不带的语句都有，则不带的会被忽略。 |
+
+### 7.3 sql
+
+>  这个元素可以被用来定义可重用的 SQL 代码段，这些 SQL 代码可以被包含在其他语句中。它可以（在加载的时候）被静态地设置参数。在不同的包含语句中可以设置不同的值到参数占位符上。比如：         
+
+### 7.4 参数 
+
+> 250
