@@ -305,7 +305,18 @@
 
 ### 2.1 
 
-39
+> 在JVM规范中，每个变量/字段都有描述信息，描述信息主要是描述字段的数据类型，方法的参数列表(包括数量，类型与顺序)与返回值。
+> 根据描述符规则，**基本数据类型和代表无返回值的void类型都是用一个大写字符来表示，对象类型则使用字符L加对象的全限定名称来表示。**
+>
+> 对于数组类型来说，每一个维度使用一个前置的[来表示，如int[]被记录 [ I
+>
+> `String[][]` 被记录为 [ [ Ljava/lang/String;
+>
+> 用描述符描述方法时，按照先参数列表，后返回值的顺序来描述。参数列表按照参数的严格顺序放在一组 () 之内，如方法:`StringgetRealNamyById(int id,String name)`的描述符为:
+> **(I,Ljava/lang/String;) Ljava/lang/String;**
+>
+> 为了压缩字节码文件的体积 。对于基本数据类型，JVM都只使用一个大写字母表示，如下所示
 
+`B - byte ,C - char ,D - double,F - float,I - int,J - long,S - short,Z -boolean,V -void,L - 对象类（Ljava/lang/String;）`
 
-
+41
