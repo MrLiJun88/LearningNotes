@@ -481,5 +481,242 @@ public class C3P0DataSourceFactory extends UnpooledDataSourceFactory {
 
 #### 7.4.3 一对多关联
 
-261
+## 8. 动态SQL
+
+> * if
+> * choose(wen,otherwise)
+> * trim(where ,sert)
+> * foreach
+
+### 8.1 if
+
+> *where* 元素只会在至少有一个子元素的条件返回 SQL 子句的情况下才去插入“WHERE”子句。而且，若语句的开头为“AND”或“OR”，*where* 元素也会将它们去除。
+
+```xml
+    <resultMap id="customerByCondition" type="com.njcit.entity.Customer">
+        <id property="id" column="id"/>
+        <result property="name" column="name"/>
+        <result property="email" column="email"/>
+        <result property="birthday" column="birth"/>
+    </resultMap>
+    <!-- if 多条件查询
+    根据id号，和姓名，两个条件进行模糊查询
+    -->
+    <select id="getCustomerByCondition" resultMap="customerByCondition">
+        select id,name,email,birth from customers
+        <where>
+            <if test="id != null">
+                id > #{id}
+            </if>
+            <if test="name != null and name != ''">
+               and name like #{name}
+            </if>
+        </where>
+    </select>
+```
+
+### 8.2 trim
+
+> 如果 *where* 元素没有按正常套路出牌，我们可以通过自定义 trim 元素来定制 *where* 元素的功能。比如，和 *where* 元素等价的自定义 trim 元素为：
+
+```xml
+   <select id="getCustomerByCondition" resultMap="customerByCondition">
+        select id,name,email,birth from customers
+        <!--
+        prefix: 前缀，为sql整体添加一个前缀
+        prefixOverrides: 取出整体字符串前面多余的字符
+        suffix:后缀，为sql整体添加一个后缀
+        suffixOverrides:取出整体字符串后面多说的字符
+        -->
+        <trim prefix="where" prefixOverrides="and | or">
+            <if test="id != null">
+                id > #{id}
+            </if>
+            <if test="name != null and name != ''">
+                and name like #{name}
+            </if>
+        </trim>
+    </select>
+```
+
+### 8.3 foreach
+
+>  动态 SQL 的另外一个常用的操作需求是对一个集合进行遍历，通常是在构建 IN 条件语句的时候。比如： 
+
+```xml
+    <select id="getCustsByList" resultMap="custsByLlist">
+        select id,name,email,birth from customers where id IN
+        <!--
+        collection:要遍历的集合名，如果是List类型，规定使用list
+        item:集合中的每个元素对象
+        open:以什么开始
+        close:以什么结束
+        separator:以什么符号分隔
+        index:索引，如果是map类型，就是map中的每个key
+        -->
+        <foreach collection="list" item="item" index="index" open="(" separator="," close=")">
+        #{item}
+        </foreach>
+    </select>
+```
+
+### 8.4 choose,when,otherwise
+
+> 相当于java语言中的 switch 语句，若一个都没有匹配到，则会匹配 <otherwise/>
+
+```xml
+  <select id="getCustomerByChoose" resultMap="custsByLlist">
+        select * from customers
+        <where>
+            <choose>
+                <when test="email != null">
+                    and email=#{email}
+                </when>
+                <when test="name != null">
+                    and name=#{name}
+                </when>
+                <otherwise>
+                    and 1 = 1
+                </otherwise>
+            </choose>
+        </where>
+    </select>
+```
+
+### 8.5 set
+
+>  类似的用于动态更新语句的解决方案叫做 *set*。*set* 元素可以用于动态包含需要更新的列，而舍去其它的。比如： 
+
+```xml
+    <update id="updateCustomer" parameterType="com.njcit.entity.Customer">
+        update customers
+        <set>
+            <if test="name != null">name=#{name},</if>
+            <if test="email != null">email=#{email}</if>
+        </set>
+        where id=#{id}
+    </update>
+```
+
+> 这里，*set* 元素会动态前置 SET 关键字，同时也会删掉无关的逗号，因为用了条件语句之后很可能就会在生成的 SQL 语句的后面留下这些逗号。（译者注：因为用的是“if”元素，若最后一个“if”没有匹配上而前面的匹配上，SQL 语句的最后就会有一个逗号遗留）
+>
+> 若你对 *set* 元素等价的自定义 trim 元素的代码感兴趣，那这就是它的真面目：
+
+```xml
+<trim prefix="SET" suffixOverrides=",">
+  ...
+</trim>
+```
+
+### 8.6 bind
+
+>  `bind` 元素可以从 OGNL 表达式中创建一个变量并将其绑定到上下文。比如： 
+
+```xml
+<select id="selectBlogsLike" resultType="Blog">
+  <bind name="pattern" value="'%' + name + '%'" />
+  SELECT * FROM BLOG
+  WHERE title LIKE #{pattern}
+</select>
+```
+
+### 8.7 多数据库支持
+
+>  一个配置了“_databaseId”变量的 databaseIdProvider 可用于动态代码中，这样就可以根据不同的数据库厂商构建特定的语句。比如下面的例子： 
+
+```xml
+<insert id="insert">
+  <selectKey keyProperty="id" resultType="int" order="BEFORE">
+    <if test="_databaseId == 'oracle'">
+      select seq_users.nextval from dual
+    </if>
+    <if test="_databaseId == 'db2'">
+      select nextval for seq_users from sysibm.sysdummy1"
+    </if>
+  </selectKey>
+  insert into users values (#{id}, #{name})
+</insert>
+```
+
+## 9. 缓存
+
+> Mybatis 使用到了两种缓存：**本地缓存（local cache）和二级缓存（second level cache）。**
+>
+> **每当一个新 session 被创建，MyBatis 就会创建一个与之相关联的本地缓存。**任何在 session  执行过的查询语句本身都会被保存在本地缓存中，那么相同的查询语句和相同的参数所产生的更改就不会二度影响数据库了。本地缓存会被增删改、提交事务、关闭事务以及关闭 session 所清空。
+>
+> 默认情况下，本地缓存数据可在整个 session 的周期内使用，这一缓存需要被用来解决循环引用错误和加快重复嵌套查询的速度，所以它可以不被禁用掉，但是你可以设置 localCacheScope=STATEMENT 表示缓存仅在语句执行时有效。
+
+### 9.1 一级缓存
+
+#### 9.1.1 一级缓存的生命周期
+
+> * MyBatis在开启一个数据库会话时，会 创建一个新的SqlSession对象，SqlSession对象中会有一个新的Executor对象。Executor对象中持有一个新的PerpetualCache对象；当会话结束时，SqlSession对象及其内部的Executor对象还有PerpetualCache对象也一并释放掉。
+> * 如果SqlSession调用了close()方法，会释放掉一级缓存PerpetualCache对象，一级缓存将不可用。
+> * 如果SqlSession调用了clearCache()，会清空PerpetualCache对象中的数据，但是该对象仍可使用。
+> * SqlSession中执行了任何一个update操作(update()、delete()、insert()) ，都会清空PerpetualCache对象的数据，但是该对象可以继续使用
+
+### 9.2 二级缓存
+
+> SqlSessionFactory层面上的二级缓存默认是不开启的，二级缓存的开席需要进行配置，实现二级缓存的时候，MyBatis要求返回的POJO必须是可序列化的。  也就是要求实现Serializable接口，配置方法很简单，只需要在映射XML文件配置就可以开启缓存了<cache/>，如果我们配置了二级缓存就意味着：
+>
+> - 映射语句文件中的所有select语句将会被缓存。
+> - 映射语句文件中的所欲insert、update和delete语句会刷新缓存。
+> - 缓存会使用默认的Least Recently Used（LRU，最近最少使用的）算法来收回。
+> - 根据时间表，比如No Flush Interval,（CNFI没有刷新间隔），缓存不会以任何时间顺序来刷新。
+> - 缓存会存储列表集合或对象(无论查询方法返回什么)的1024个引用
+> - 缓存会被视为是read/write(可读/可写)的缓存，意味着对象检索不是共享的，而且可以安全的被调用者修改，不干扰其他调用者或线程所做的潜在修改。
+
+#### 9.2.1 开始二级缓存
+
+> 在全局配置中开始二级缓存，默认是开启的
+
+```xml
+<!--开启二级缓存 -->
+        <setting name="cacheEnabled" value="true"/>
+```
+
+#### 9.2.2  通过 cache 元素的属性来修改
+
+>  在需要缓存的mapp.xml中配置二级缓存
+>
+> 这个更高级的配置创建了一个 FIFO 缓存，每隔 60 秒刷新，最多可以存储结果对象或列表的 512个引用，而且返回的对象被认为是只读的，因此对它们进行修改可能会在不同线程中的调用者产生冲突。         
+
+```xml
+<mapper namespace="com.njcit.mapper.CustomerMapper">
+<cache
+  eviction="FIFO"
+  flushInterval="60000"
+  size="512"
+  readOnly="true"/>
+```
+
+> ​          这个更高级的配置创建了一个 FIFO 缓存，每隔 60 秒刷新，最多可以存储结果对象或列表的 512          个引用，而且返回的对象被认为是只读的，因此对它们进行修改可能会在不同线程中的调用者产生冲突。        
+>
+> ​          可用的清除策略有：        
+>
+> - `LRU` – 最近最少使用：移除最长时间不被使用的对象。          
+> - `FIFO` – 先进先出：按对象进入缓存的顺序来移除它们。          
+> -  `SOFT` – 软引用：基于垃圾回收器状态和软引用规则移除对象。          
+> - `WEAK` – 弱引用：更积极地基于垃圾收集器状态和弱引用规则移除对象。          
+>
+> **默认的清除策略是 LRU。**
+>
+> ​          flushInterval（刷新间隔）属性可以被设置为任意的正整数，设置的值应该是一个以毫秒为单位的合理时间量。默认情况是不设置，也就是没有刷新间隔，缓存仅仅会在调用语句时刷新。        
+>
+> ​          size（引用数目）属性可以被设置为任意正整数，要注意欲缓存对象的大小和运行环境中可用的内存资源。默认值是 1024。        
+>
+> ​          readOnly（只读）属性可以被设置为 true 或 false。只读的缓存会给所有调用者返回缓存对象的相同实例。因此这些对象不能被修改。这就提供了可观的性能提升。而可读写的缓存会（通过序列化）返回缓存对象的拷贝。速度上会慢一些，但是更安全，因此默认值是 false。        
+>
+> ​          **提示 二级缓存是事务性的。这意味着，当 SqlSession 完成并提交时，或是完成并回滚，但没有执行          flushCache=true 的 insert/delete/update 语句时，缓存会获得更新。**        
+
+### 9.3 缓存有关设置
+
+> * 全局Setting的cacheEnable:配置二级缓存的开关，一级缓存是一直打开的
+> * select标签的useCache属性：配置这个select是否使用二级缓存，一级缓存是一直使用的
+> * sql标签的fluchCache属性：增删改默认的fluchCache=true,sql执行以后，会同时清空一级缓存和二级缓存，select默认fluchCache=false
+> * sqlSession.clearCache():只是用来清除一级缓存
+
+### 9.4 整合第三方缓存
+
+> 
 
