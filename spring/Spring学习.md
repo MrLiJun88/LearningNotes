@@ -634,10 +634,16 @@ public class PersonDao {
 > @Autowired注解是按照类型（byType）装配依赖对象，默认情况下它要求依赖对象必须存在，如果允许null值，可以设置它的required属性为false。如果我们想使用按照名称（byName）来装配，可以结合@Qualifier注解一起使用。如下：
 >
 > ```java
+> @Repository
+> @Qualifier(value="hahah")
+> public interface UserDao {
+>     
+> }
+> 
 > public class TestServiceImpl {
->     @Autowired
->     @Qualifier("userDao")
->     private UserDao userDao; 
+>  @Autowired
+>  @Qualifier("userDao")
+>  private UserDao userDao; 
 > }
 > ```
 
