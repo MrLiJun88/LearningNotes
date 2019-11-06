@@ -197,7 +197,7 @@ public @interface Conditional {
 }
 ```
 
->  从原码中可以看到，需要传入一个Class数组，并且需要继承Condition接口：
+>  从源码中可以看到，需要传入一个Class数组，并且需要继承Condition接口：
 >
 >  Condition是个接口，需要实现matches方法，返回true则注入bean，false则不注入。  
 
@@ -267,7 +267,7 @@ public class WindowsCondition implements Condition {
     }
 ```
 
-### 6.2 标注在方法上
+### 6.2 标注在类上
 
 >  **一个类中可以注入很多实例，@Conditional标注在类上就决定了一批bean是否注入。** 
 
@@ -286,7 +286,7 @@ public class MyConfig2 {
     ....
  ```
 
-### 6.3 多条件类
+### 6.3 多条件加载
 
 >  前言中说，@Conditional注解传入的是一个Class数组，存在多种条件类的情况。 
 >
@@ -303,4 +303,509 @@ public class MyConfig2 {
     }
 ```
 
-8
+## 7. 给容器中注册组件方式
+
+> * 配置包扫描+组件标识注解(`@Controller,.@Service,@Repository,@Component`)
+> * `@Bean` (导入的第三方包里面组件)
+> * `@Import` (快速的给容器中导入组件)
+
+### 7.1 使用@Import导入组件
+
+> `@Import` 可以快速的导入组件，value接收的是一个Class类型的数组,
+>
+> `@Import` 根据源码只能放在类上
+
+```java
+@Target(ElementType.TYPE)
+@Retention(RetentionPolicy.RUNTIME)
+@Documented
+public @interface Import {
+	Class<?>[] value();
+}
+```
+
+> 将`Dog`类使用`@Import`注解导入到容器中
+>
+> id 默认是组件的全类名 `com.njcit.entity.Dog`
+
+```java
+@Configuration
+@ComponentScan(value = {"com.njcit"}
+)
+@Import(value = {Dog.class})
+public class MyConfig {
+```
+
+### 7.2 使用 ImportSelector 批量导入组件
+
+```java
+public interface ImportSelector {
+
+	String[] selectImports(AnnotationMetadata importingClassMetadata);
+
+}
+```
+
+> 编写自己的批量导入逻辑,实现ImportSelector接口
+
+```java
+/**
+ * 自定义导入逻辑
+ */
+public class MyImportSelector implements ImportSelector {
+
+    /**
+     * AnnotationMetadata 导入该类的信息
+     * @return 导入的组件的全类名
+     */
+    @Override
+    public String[] selectImports(AnnotationMetadata importingClassMetadata) {
+      //将要注册到容器的bean，以全类名的方式返回
+        return new String[]{"com.njcit.entity.XiAn","com.njcit.entity.BeiJing"};
+    }
+}
+```
+
+> 将自定义的批量导入逻辑声明在 @Import中
+>
+> id 默认为类的全类名
+
+```java
+@Configuration
+@ComponentScan(value = {"com.njcit"}
+)
+@Import(value = {MyImportSelector.class})
+public class MyConfig {
+```
+
+### 7.3 ImportBeanDefinitionRegistrar
+
+```java
+public interface ImportBeanDefinitionRegistrar {
+
+	/**
+	 * @param importingClassMetadata annotation metadata of the importing class
+	 * @param registry current bean definition registry
+	 */
+	public void registerBeanDefinitions(
+			AnnotationMetadata importingClassMetadata, BeanDefinitionRegistry registry);
+
+}
+```
+
+> 自定义要注册的组件逻辑,实现ImportBeanDefinitionRegistrar接口
+
+```java
+public class MyImportBeanDefinitionRegister implements ImportBeanDefinitionRegistrar {
+
+    @Override
+    public void registerBeanDefinitions(AnnotationMetadata importingClassMetadata, BeanDefinitionRegistry registry) {
+
+        /**如果容器已经有了dog的存在，则注册xian类，否则注册beijing类*/
+        if(registry.containsBeanDefinition("com.njcit.entity.Dog")){
+            BeanDefinition beanDefinition = new RootBeanDefinition(XiAn.class);
+            //还可以设置类的作用域
+            beanDefinition.setScope("prototype");
+            registry.registerBeanDefinition("xian",beanDefinition);
+        }
+        else {
+            BeanDefinition beanDefinition = new RootBeanDefinition(BeiJing.class);
+            registry.registerBeanDefinition("beijing",beanDefinition);
+        }
+    }
+}
+```
+
+> 将自定义的批量导入逻辑声明在 @Import中
+
+```java
+@Configuration
+@ComponentScan(value = {"com.njcit"}
+)
+@Import(value = {MyImportBeanDefinitionRegister.class})
+public class MyConfig {
+```
+
+### 7.4 FactoryBean
+
+```java
+public interface FactoryBean<T> {
+
+	@Nullable
+	T getObject() throws Exception;
+
+	@Nullable
+	Class<?> getObjectType();
+
+	default boolean isSingleton() {
+		return true;
+	}
+}
+```
+
+```java
+/**
+ * 定义自己的FactoryBean对象 
+ */
+public class MyFactoryBean implements FactoryBean<BeiJing> {
+
+    @Override
+    public BeiJing getObject() throws Exception {
+        return new BeiJing();
+    }
+
+    @Override
+    public Class<?> getObjectType() {
+        return BeiJing.class;
+    }
+}
+```
+
+> 将自定义的`factoryBean`添加到配置类中
+
+```java
+@Configuration
+@ComponentScan(value = {"com.njcit"}
+)
+@Import(value = {Dog.class})
+public class MyConfig {
+    
+    /**将自定义的工厂bean声明在配置类中
+    id 默认为方法名字，类型为FactoryBean中getObject()获取的对象类型
+    */
+    @Bean
+    public MyFactoryBean beijing(){
+        return new MyFactoryBean();
+    }
+}
+```
+
+`beijing`
+
+`bean类型 class com.njcit.entity.BeiJing`
+
+## 8. Bean生命周期
+
+> * 指定初始化和销毁方法
+>
+>   通过`@Bean`注解标识初始化和销毁方法
+>
+>   ```java
+>   @Bean(name = "dog",initMethod = "init",destroyMethod = "destroy")
+>       public Dog getDogInstance(){
+>           return new Dog();
+>       }
+>   ```
+>
+> * 通过让Bean 实现`InitializingBean` 接口，实现初始化,通过让Bean实现 `DisposableBean`接口，实现销毁，当类被注册到容器中，会自动调用`afterPropertiesSet()`初始化方法与`destroy()`方法
+>
+>   ```java
+>   public class XiAn implements InitializingBean, DisposableBean{
+>   
+>       private String name;
+>   
+>       public XiAn() {
+>           System.out.println("xian被创建...");
+>       }
+>   
+>       @Override
+>       public void destroy() throws Exception {
+>           System.out.println("xian被卸载");
+>       }
+>   
+>       @Override
+>       public void afterPropertiesSet() throws Exception {
+>           System.out.println("xian被初始化");
+>       }
+>   }
+>   ```
+>
+> * 使用JSR250中注解 `@PostConstruct` 在bean创建完成并且属性赋值后初始化
+>
+>   `@PreDestroy`在容器销毁`bean`之前。当类被注册到容器中时，会自动调用被
+>
+>   `@PostConstruct`标注的初始化方法，和在类被销毁时会自动被`@PreDestroy`标注的销毁方法
+>
+>   ```java
+>   public class BeiJing {
+>   
+>       @PostConstruct
+>       public void init(){
+>           System.out.println("beijing类被初始化");
+>       }
+>   
+>       @PreDestroy
+>       public void destroy() {
+>           System.out.println("beijing类被卸载");
+>       }
+>   }
+>   ```
+>
+> * BeanPostProcessor: bean后置处理器,会给每个在容器中注册的类都添加上实现的初始化，和销毁方法。
+>
+>   * `postProcessBeforeInitialization`()在bean构造方法之前执行
+>   * `postProcessAfterInitialization`()在bean构造方法之后执行
+>
+>   ```java
+>   public interface BeanPostProcessor {
+>       /**在初始化之前工作*/
+>   	@Nullable
+>   	default Object postProcessBeforeInitialization(Object bean, String beanName) throws BeansException {
+>   		return bean;
+>   	}
+>   
+>   	@Nullable
+>   	default Object postProcessAfterInitialization(Object bean, String beanName) throws BeansException {
+>   		return bean;
+>   	}
+>   }
+>   ```
+>
+>   ```java
+>   //自定义 BeanPostProcessor 的实现类
+>   @Component
+>   public class MyBeanPostProcessor implements BeanPostProcessor {
+>   
+>       @Override
+>       public Object postProcessBeforeInitialization(Object bean, String beanName) throws BeansException {
+>           System.out.println("在初始化之前被调用***");
+>           System.out.println("beanName: " + beanName);
+>           System.out.println("beanClass: " + bean.getClass());
+>           System.out.println("=====================");
+>           return bean;
+>       }
+>   
+>       @Override
+>       public Object postProcessAfterInitialization(Object bean, String beanName) throws BeansException {
+>           System.out.println("在初始化之后被调用...");
+>   
+>           return bean;
+>       }
+>   }
+>   ```
+>
+>   `dog类被创建...`
+>   `在初始化之前被调用***`
+>   `beanName: dog`
+>
+>   `beanClass: class com.njcit.entity.Dog`
+>
+>   `dog类被初始化`
+>   `在初始化之后被调用...`
+
+## 9. 为bean对象属性赋值
+
+> * `@Value` 注解赋值
+>
+>   * 基本数值
+>   * SpEL,#{}
+>   * ${},取出配置文件中的值
+>
+>   ```java
+>   public class Person {}
+>       @Value("001")
+>       private long id;
+>       @Value("lijun")
+>       private String name;
+>       @Value("#{56-1}") //SpEl表达式
+>       private int age;
+>   ```
+>
+> * 从外部配置文件获取属性值
+>
+>   * 在配置类中通过@PropertySource注解加载到配置文件
+>
+>     ```java
+>     /**使用@PropertySource加载外部文件配置*/
+>     @PropertySource(value = {"classpath:person.properties"})
+>     @Configuration
+>     public class MyConfig3 {
+>     ```
+>
+>   * 通过 ${} ,取出配置文件中的值，赋值给属性变量
+>
+>     ```java
+>     public class Person {
+>     
+>         @Value(value = "${person.id}")
+>         private long id;
+>         @Value("${person.name}")
+>         private String name;
+>         @Value("${person.age}")
+>         private int age;
+>     ```
+>
+>   * 可能通过上下文环境获取外部配置文件值
+>
+>     ```java
+>      ApplicationContext context = new AnnotationConfigApplicationContext(MyConfig3.class);
+>     
+>             Environment environment = context.getEnvironment();
+>             String id = environment.getProperty("person.id");
+>             String name = environment.getProperty("person.name");
+>     ```
+
+## 10. 自动装配
+
+### 10.1 @Autowired
+
+> @Autowired:自动注入
+>
+> 1.  默认优先级按照类型去容器中找到对应的组件`:PersonController pc = context.getBean(PersonController.class);`
+>
+> 2. 如果找到多个相同类型的组件，再将属性的名称作为组件的id去容器中查找 `PersonController pc = (PersonController)context.getBean("personController");`
+>
+> 3. 可以使用`@Qualifier(value="bookDao")` 使用@Qualifier指定需要配置的组件的id,而不是属性名
+>
+> 4. `@Autowired`自动装配默认一定要找到，否则会异常，可以使用`@Autowired(required=false)`
+>
+> 5. `@Primary` :让Spring进行自动装配时，默认首选使用哪个bean,该注解用于类或方法上,且不能与
+>
+>    `@Qualifier`注解一起使用，因为`@Qualifier`是精确匹配
+
+### 10.2 @Resource 和 @Inject
+
+> * `@Resource` 可以和`@Autowired`一样实现自动装配功能，默认是按照属性名称进行装配，但不能支持 `@Primary`注解和`@Autowired(required=false)`功能
+>
+> * `@Inject` 使用需要额外导入包,功能与 `@Autowired `类似,但没有 `requied=false `的功能
+>
+>   ```xml
+>         <!-- Inject-->
+>           <dependency>
+>               <groupId>javax.inject</groupId>
+>               <artifactId>javax.inject</artifactId>
+>               <version>1</version>
+>           </dependency>
+>   ```
+
+## 11. @Profile 切换环境
+
+> Spring 为我们提供的可以根据当前环境，动态的激活和切换一系统组件的功能
+>
+> 指定组件在哪个环的情况下才能被注册到容器中，不指定时，任何环境都能注册这个组件
+>
+> 加了环境标识的bean,只有这个环境被激活才能注册到容器中
+>
+> ```java
+> @Target({ElementType.TYPE, ElementType.METHOD})
+> @Retention(RetentionPolicy.RUNTIME)
+> @Documented
+> @Conditional(ProfileCondition.class)
+> public @interface Profile {
+> 
+> 	String[] value();
+> 
+> }
+> ```
+
+### 11.1 环境切换
+
+> * 使用命令行动态参数，在虚拟机参数位置设置 `-Dspring.profiles.active=test`
+>
+> * 使用代码方式激活环境
+>
+>   ```java
+>    /**创建出IOC容器*/
+>           AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext();
+>           /**设置需要使用的环境*/
+>           context.getEnvironment().setActiveProfiles("dev");
+>           /**将配置类注册到环境中*/
+>           context.register(DataSourceConfig.class);
+>           /**容器启动刷新*/
+>           context.refresh();
+>   ```
+>
+> * 这里举一个以加载不同数据库的环境做例子
+>
+>   ```java
+>       @Bean
+>       //定义环境是测试环境
+>       @Profile(value = {"test"})
+>       public DataSource dataSourceByTest() throws Exception {
+>           ComboPooledDataSource dataSource = new ComboPooledDataSource();
+>           dataSource.setDriverClass("com.mysql.jdbc.Driver");
+>           dataSource.setUser("root");
+>           dataSource.setPassword("123");
+>           dataSource.setJdbcUrl("jdbc:mysql://localhost:3306/test");
+>           return dataSource;
+>       }
+>       @Bean
+>       //定义环境是开发环境
+>       @Profile(value = {"dev"})
+>       public DataSource dataSourceByDev() throws Exception {
+>           ComboPooledDataSource dataSource = new ComboPooledDataSource();
+>   ```
+>
+> * 当`@Profile` 定义在类上，只有当匹配`@Profile`指定的环境时，整个类才会被加载
+
+## 12. 基于AOP的注解开发
+
+### 12.1 定义切面类
+
+```java
+@Aspect
+public class Log4Cal {
+
+    @Before("execution(* com.njcit.aop.Calculator.*(..))")
+    public void logStart(JoinPoint joinPoint){
+        Signature signature = joinPoint.getSignature();
+        System.out.println("被代理方法名 " + signature.getName() + " 被代理类的类型" + signature.getDeclaringType());
+        System.out.println("代理方法开始运行前....");
+    }
+
+    @After("execution(* com.njcit.aop.Calculator.*(..))")
+    public void logOver(){
+        System.out.println("代理方法运行结束后....");
+    }
+
+    @AfterReturning(returning = "object",value = "execution(* com.njcit.aop.Calculator.*(..))")
+    public void logReturning(Object object){
+        System.out.println("返回结果：" + object);
+        System.out.println("代理方法正常返回后运行....");
+    }
+
+    @AfterThrowing(throwing = "exception",value = "execution(* com.njcit.aop.Calculator.*(..))")
+    public void logThrowing(Exception exception){
+        System.out.println("异常信息：" + exception.getMessage());
+        System.out.println("代理方法遇到异常....");
+    }
+}
+```
+
+### 12.2 将切面类和要代理的类加入到配置类中
+
+```java
+@Configuration
+/**@EnableAspectJAutoProxy 开启基于注解的aop模式
+ * 相当于在applicationContext.xml中配置<aop:aspectj-autoproxy/>开启注解功能
+ * */
+@EnableAspectJAutoProxy
+public class AOPConfig {
+
+    @Bean
+    public Calculator calculator(){
+        return new Calculator();
+    }
+
+    @Bean
+    public Log4Cal log4Cal(){
+        return new Log4Cal();
+    }
+}
+```
+
+### 12.3 开启基于AOP注解功能
+
+> 在配置类上使用 `@EnableAspectJAutoProxy`
+
+```java
+@Configuration
+/**@EnableAspectJAutoProxy 开启基于注解的aop模式
+ * 相当于在applicationContext.xml中配置<aop:aspectj-autoproxy/>开启注解功能
+ * */
+@EnableAspectJAutoProxy
+public class AOPConfig {
+```
+
+28
+

@@ -24,3 +24,10 @@
 > * android:layout_alignParentBottom
 > * android:layout_below
 
+## 2. TestView
+
+> * 文字大小，颜色
+> * 文件+icon
+> * 中划线，下划线
+> * 跑马灯
+
