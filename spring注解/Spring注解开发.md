@@ -520,11 +520,11 @@ public class MyConfig {
 >   }
 >   ```
 >
-> * 使用JSR250中注解 `@PostConstruct` 在bean创建完成并且属性赋值后初始化
+> * 使用JSR250中注解 `@PostConstruct` **在bean创建和构造方法之后被标识的方法会被执行**
 >
->   `@PreDestroy`在容器销毁`bean`之前。当类被注册到容器中时，会自动调用被
+>   `@PreDestroy`在容器销毁`bean`之前。
 >
->   `@PostConstruct`标注的初始化方法，和在类被销毁时会自动被`@PreDestroy`标注的销毁方法
+>   当类被注册到容器中时，会自动调用被`@PostConstruct`标注的初始化方法,在完成构造方法之后，和在类被销毁时会自动被`@PreDestroy`标注的销毁方法
 >
 >   ```java
 >   public class BeiJing {
@@ -613,7 +613,7 @@ public class MyConfig {
 >
 > * 从外部配置文件获取属性值
 >
->   * 在配置类中通过@PropertySource注解加载到配置文件
+>   * 在配置类中通过`@PropertySource`注解加载到配置文件
 >
 >     ```java
 >     /**使用@PropertySource加载外部文件配置*/
@@ -774,6 +774,8 @@ public class Log4Cal {
 
 ### 12.2 将切面类和要代理的类加入到配置类中
 
+> `@EnableAspectJAutoProxy` 开启基于注解的aop
+
 ```java
 @Configuration
 /**@EnableAspectJAutoProxy 开启基于注解的aop模式
@@ -786,7 +788,7 @@ public class AOPConfig {
     public Calculator calculator(){
         return new Calculator();
     }
-
+    /**切面类*/
     @Bean
     public Log4Cal log4Cal(){
         return new Log4Cal();
@@ -807,5 +809,356 @@ public class AOPConfig {
 public class AOPConfig {
 ```
 
-28
+## 13. 基于注解的声明式事务
+
+> 1. 在配置类上添加 `@EnableTransactionManagement`注解
+> 2. 在配置类上声明事务管理器 `DataSourceTransactionManager`,添加到容器中
+> 3. 在CRUD方法上添加 `@Transactional`注解，标识这是一个事务方法
+
+### 13.1 编写配置文件
+
+```java
+/**
+ * 1. @EnableTransactionManagement : 开启基于注解的事务管理功能
+ * 2. 将事务管理器添加到容器中 DataSourceTransactionManager
+ * 声明式事务
+ */
+@Configuration
+@ComponentScan
+@EnableTransactionManagement
+public class TXConfig {
+
+    /**
+     * 配置数据源
+     */
+    @Bean
+    public DataSource dataSource() throws Exception{
+        ComboPooledDataSource dataSource = new ComboPooledDataSource();
+        dataSource.setUser("root");
+        dataSource.setPassword("123");
+        dataSource.setDriverClass("com.mysql.jdbc.Driver");
+        dataSource.setJdbcUrl("jdbc:mysql://localhost:3306/test");
+        return dataSource;
+    }
+
+    /**
+     * 声明jdbcTemplate 来操作数据库
+     */
+    @Bean
+    public JdbcTemplate jdbcTemplate() throws Exception {
+        JdbcTemplate jdbcTemplate = new JdbcTemplate();
+        jdbcTemplate.setDataSource(this.dataSource());
+        return jdbcTemplate;
+    }
+
+    /**配置事务管理器*/
+    @Bean
+    public DataSourceTransactionManager dataSourceTransactionManager() throws Exception {
+        DataSourceTransactionManager transactionManager = new DataSourceTransactionManager();
+        transactionManager.setDataSource(this.dataSource());
+        return transactionManager;
+    }
+}
+```
+
+### 13.2 在CRUD方法上添加事务注解
+
+```java
+   @Transactional(
+            /**出现哪些异常需要数据回滚*/
+            rollbackFor = {ArithmeticException.class}
+    )
+    public void insertPerson(){
+        personDao.insertPerson();
+    }
+```
+
+## 14. 扩展知识
+
+### 14.1 BeanFactoryPostProcessor
+
+> bean工厂的bean属性后置处理容器，说通俗一些就是可以管理我们的bean工厂内所有的beandefinition（未实例化）数据，可以随心所欲的修改属性。 
+
+#### 14.1.1 使用方法
+
+```java
+/**
+ * 实现自己的beanFactory后置处理器
+ */
+public class MyBeanFactoryPostProcessor implements BeanFactoryPostProcessor {
+    @Override
+    public void postProcessBeanFactory(ConfigurableListableBeanFactory beanFactory) throws BeansException {
+        System.out.println("MyBeanFactoryPostProcessor 在工作...");
+        int beanCounts = beanFactory.getBeanDefinitionCount();
+        System.out.println("有 " + beanCounts + " 已经被创建了");
+        String[] beanNames = beanFactory.getBeanDefinitionNames();
+        System.out.println("===============已创建的bean名字=============");
+        for (int i = 0; i < beanNames.length; i++) {
+            String name = beanNames[i];
+            BeanDefinition bd = beanFactory.getBeanDefinition(name);
+            System.out.println(name + " bean属性: " + bd.getPropertyValues().toString());
+        }
+    }
+}
+```
+
+```java
+/**
+ * BeanPostProcessor : bean后置处理器，bean创建对象初始化前后进行拦截工作
+ * BeanFactoryPostProcessor ：beanFactory的后置处理器
+ *               在BeanFactory标准初始化之后调用,所有的bean已经保存加载到beanFactory中
+ *               但bean的实例还未创建,它的运行在BeanPostProcessor之前,即在其他Bean实例化之前
+ *
+ */
+@Configuration
+public class ExtConfig {
+
+    @Bean
+    public MyBeanFactoryPostProcessor myBeanFactoryPostProcessor(){
+        return new MyBeanFactoryPostProcessor();
+    }
+}
+```
+
+### 14.2 BeanPostProcessor
+
+> 从范围上来说，从上面的所有的bean成为了特定的bean，其次BeanFactoryPostProcessor可以在初始化前修改bean的属性等情况，但是BeanPostProcessor只能在初始化后（注意初始化不包括init方法）执行一些操作。
+
+#### 14.2.1 使用方法
+
+```java
+public class Cat {
+    @Value("tomcat")
+    private String catName;
+
+    public Cat() {
+        System.out.println("Cat的构造方法....");
+    }
+
+    @PostConstruct
+    public void init(){
+        System.out.println("Cat init ...");
+    }
+
+    @PreDestroy
+    public void destroy(){
+        System.out.println("Cat destroy ...");
+    }
+
+    @Override
+    public String toString() {
+        return "Cat{" +
+                "catName='" + catName + '\'' +
+                '}';
+    }
+}
+```
+
+```java
+public class MyBeanPostProcessor implements BeanPostProcessor {
+
+    @Override
+    public Object postProcessBeforeInitialization(Object bean, String beanName) throws BeansException {
+        /** 如果当前的bean是Student,则打印日志*/
+        if(bean instanceof Cat){
+            System.out.println("postProcessBeforeInitialization bean : " + beanName);
+        }
+        return bean;
+    }
+
+    @Override
+    public Object postProcessAfterInitialization(Object bean, String beanName) throws BeansException {
+        if(bean instanceof Cat){
+            System.out.println("postProcessAfterInitialization bean : " + beanName);
+        }
+        return bean;
+    }
+}
+```
+
+```java
+@Configuration
+public class MyConfig4 {
+
+    @Bean
+    public Cat cat(){
+        return new Cat();
+    }
+
+    @Bean
+    public MyBeanPostProcessor myBeanPostProcessor(){
+        return new MyBeanPostProcessor();
+    }
+}
+```
+
+> 输出结果
+>
+> `Cat的构造方法....`
+> `postProcessBeforeInitialization bean : cat`
+> `Cat init ...`
+> `postProcessAfterInitialization bean : cat`
+>
+> * 先打印出了构造器内部执行的话，意味着这个时候实例化了Student类，
+>
+> * 在init方法前执行了postProcessBeforeInitialization
+>
+> * 在init方法后执行了postProcessAfterInitialization
+
+### 14.3 BeanDefinitionRegistryPostProcessor
+
+> `BeanDefinitionRegistryPostProcessor` 是 `BeanFactoryPostProcessor` 的一个子接口
+>
+> 在所有bean定义信息将要被加载，但还未实例化之前。
+>
+> 一般来说在业务代码中，加上 @Component, @Service，@Repository, @Controller等注解就可以实现将bean注册到Spring中了。（静态）
+>
+> **问题：** 怎么动态注册到Spring中呢？
+>  那么就是用`BeanDefinitionRegistryPostProcessor`了。
+>  `BeanDefinitionRegistryPostProcessor`继承`BeanFactoryPostProcessor`，是一种比较特殊的`BeanFactoryPostProcessor`。
+>
+> `BeanDefinitionRegistryPostProcessor`中定义的`postProcessBeanDefinitionRegistry(BeanDefinitionRegistry registry)`方法 可以让我们实现自定义的注册bean定义的逻辑。
+
+```java
+public class MyBeanDefinitionRegistryPostProcessor implements BeanDefinitionRegistryPostProcessor {
+
+    @Override
+    public void postProcessBeanDefinitionRegistry(BeanDefinitionRegistry registry) throws BeansException {
+        System.out.println("postProcessBeanDefinitionRegistry...bean的数量 " + registry.getBeanDefinitionCount());
+        /***为容器中注册一个组件*/
+        BeanDefinition cat = new RootBeanDefinition(Cat.class);
+        registry.registerBeanDefinition("myCat",cat);
+    }
+
+    @Override
+    public void postProcessBeanFactory(ConfigurableListableBeanFactory beanFactory) throws BeansException {
+        System.out.println("postProcessBeanFactory...bean的数量 " + beanFactory.getBeanDefinitionCount());
+    }
+}
+```
+
+### 14.4 ApplicationListener
+
+> 监听窗口中发布的事件。事件驱动模型开发
+
+```java
+@FunctionalInterface
+public interface ApplicationListener<E extends ApplicationEvent> extends EventListener {
+
+	/**
+	 * Handle an application event.
+	 * @param event the event to respond to
+	 */
+	void onApplicationEvent(E event);
+}
+```
+
+## 15. Spring容器的创建过程
+
+> **Srping IOC的创建过程主要在 refresh() 方法中完成的**
+>
+> 1. `prepareRefresh()`刷新前的预处理
+>
+>    1. `initPropertySources()` 初始化一些属性设置，该方法是空的，由子类自定义个性化的属性设置方法
+>    2. `getEnvironment().validateRequiredProperties()` 校验属性的合法性
+>    3. `this.earlyApplicationEvents = new LinkedHashSet<>()`保存容器早期的事件
+>
+> 2. `ConfigurableListableBeanFactory beanFactory = obtainFreshBeanFactory()` 获取bean工厂
+>
+>    1. `refreshBeanFactory();`刷新bean工厂
+>       1. `this.beanFactory = new DefaultListableBeanFactory()`创建了一个bean工厂
+>       2. 为该benaFactory设置一个id
+>    2.  `getBeanFactory();`返回刚才GenericalApplicationContext创建的beanFactory对象
+>    3. 将创建的BeanFactory ( DefaultListableBeanFactory )返回
+>
+> 3. `prepareBeanFactory(beanFactory);`BeanFactory预处理工作，对BeanFactory进行设置
+>
+>    1.  设置BeanFactory的类加载器，支持的表达式解析器，设置忽略的自动装配接口，注册可以解析的自动装配,环境变量等等...
+>
+> 4. `postProcessBeanFactory(beanFactory);`BeanFactory准备完成后的后置处理工作,子类通过重写这个方法来在BeanFactory创建并预准备完成以后做进一步处理。
+>
+> 5. `invokeBeanFactoryPostProcessors(beanFactory);`执行BeanFactory的后置处理器，**先执行`BeanDefinitionRegistryPostProcessor`再执行`BeanFactoryPostProcessor`**，在BeanFactory标准初始化之后执行的，即BeanFactory创建后
+>
+>    1. `PostProcessorRegistrationDelegate.invokeBeanFactoryPostProcessors(beanFactory, getBeanFactoryPostProcessors())`
+>       1. 获取所有的`BeanDefinitionRegistryPostProcessor`的名字，存放在一个`String[]`中
+>       2. 先执行实现了`PriorityOrdered`优先级接口的`BeanDefinitionRegistryPostProcessor`
+>       3. 在执行实现了`Order`顺序接口的`BeanDefinitionRegistryPostProcessor`
+>       4. 最后执行没实现任何优先级或者顺序接口的`BeanDefinitionRegistryPostProcessor`
+>       5. 再执行`BeanFactoryPostProcessor`的方法
+>          1. 获取所有的`BeanFactoryPostProcessor`
+>          2. 先执行实现了`PriorityOrdered`优先级接口的`BeanFactoryPostProcessor`
+>          3. 在执行实现了`Order`顺序接口的`BeanFactoryPostProcessor`
+>          4. 最后执行没实现任何优先级或者顺序接口的`BeanFactoryPostProcessor`
+>
+> 6. `registerBeanPostProcessors(beanFactory);`注册Bean的后置处理器
+>
+>    1. `registerBeanPostProcessors(beanFactory, this);`
+>
+>       1. 获取所有的`BeanPostProcessor`名存放在`String[]`中
+>
+>          `DestructionAwareBeanPostProcessor`
+>
+>          `InstantiationAwareBeanPostProcessor`
+>
+>          `SmartInstantiationAwareBeanPostProcessor`
+>
+>          `MergedBeanDefinitonPostProcessor`不同接口类型的`BeanPostProcessor`，在Bean创建时期执行时机是不一样的
+>
+>       2. 先注册 `PriorityOrdered`优先级接口的`BeanPostProcessor`
+>
+>       3. 再注册`Order`接口的
+>
+>       4. 最后注册没有实现任何优先级接口的`BeanPostProcessor`
+>
+>       5. 最终注册所有的内部`internalPostProcessors`
+>
+>       6. 注册一个`ApplicationListenerDetector`来在Bean创建完成后检查是否是实现了`ApplicationListener`的实现类，如果是 `applicationContext.addApplicatonListener(ApplicationListener<?> bean)`
+>
+> 7. `initMessageSource();`47
+
+```java
+@Override
+	public void refresh() throws BeansException, IllegalStateException {
+		synchronized (this.startupShutdownMonitor) {
+			// Prepare this context for refreshing.
+			prepareRefresh();
+
+			// Tell the subclass to refresh the internal bean factory.
+			ConfigurableListableBeanFactory beanFactory = obtainFreshBeanFactory();
+
+			// Prepare the bean factory for use in this context.
+			prepareBeanFactory(beanFactory);
+
+			try {
+				// Allows post-processing of the bean factory in context subclasses.
+				postProcessBeanFactory(beanFactory);
+
+				// Invoke factory processors registered as beans in the context.
+				invokeBeanFactoryPostProcessors(beanFactory);
+
+				// Register bean processors that intercept bean creation.
+				registerBeanPostProcessors(beanFactory);
+
+				// Initialize message source for this context.
+				initMessageSource();
+
+				// Initialize event multicaster for this context.
+				initApplicationEventMulticaster();
+
+				// Initialize other special beans in specific context subclasses.
+				onRefresh();
+
+				// Check for listener beans and register them.
+				registerListeners();
+
+				// Instantiate all remaining (non-lazy-init) singletons.
+				finishBeanFactoryInitialization(beanFactory);
+
+				// Last step: publish corresponding event.
+				finishRefresh();
+			}
+            catch(BeansException ex){
+                .....
+            }
+```
 
