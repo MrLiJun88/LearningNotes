@@ -1075,7 +1075,7 @@ public interface ApplicationListener<E extends ApplicationEvent> extends EventLi
 >
 >    1.  设置BeanFactory的类加载器，支持的表达式解析器，设置忽略的自动装配接口，注册可以解析的自动装配,环境变量等等...
 >
-> 4. `postProcessBeanFactory(beanFactory);`BeanFactory准备完成后的后置处理工作,子类通过重写这个方法来在BeanFactory创建并预准备完成以后做进一步处理。
+> 4. `postProcessBeanFactory(beanFactory);`BeanFactory准备完成后的后置处理工作,子类通过重写这个方法来在`BeanFactory`创建并预准备完成以后做进一步处理。
 >
 > 5. `invokeBeanFactoryPostProcessors(beanFactory);`执行BeanFactory的后置处理器，**先执行`BeanDefinitionRegistryPostProcessor`再执行`BeanFactoryPostProcessor`**，在BeanFactory标准初始化之后执行的，即BeanFactory创建后
 >
@@ -1096,13 +1096,13 @@ public interface ApplicationListener<E extends ApplicationEvent> extends EventLi
 >
 >       1. 获取所有的`BeanPostProcessor`名存放在`String[]`中
 >
->          `DestructionAwareBeanPostProcessor`
+>       `DestructionAwareBeanPostProcessor`
 >
->          `InstantiationAwareBeanPostProcessor`
+>       `InstantiationAwareBeanPostProcessor`
 >
->          `SmartInstantiationAwareBeanPostProcessor`
+>       `SmartInstantiationAwareBeanPostProcessor`
 >
->          `MergedBeanDefinitonPostProcessor`不同接口类型的`BeanPostProcessor`，在Bean创建时期执行时机是不一样的
+>       `MergedBeanDefinitonPostProcessor`不同接口类型的`BeanPostProcessor`，在Bean创建时期执行时机是不一样的
 >
 >       2. 先注册 `PriorityOrdered`优先级接口的`BeanPostProcessor`
 >
@@ -1114,7 +1114,117 @@ public interface ApplicationListener<E extends ApplicationEvent> extends EventLi
 >
 >       6. 注册一个`ApplicationListenerDetector`来在Bean创建完成后检查是否是实现了`ApplicationListener`的实现类，如果是 `applicationContext.addApplicatonListener(ApplicationListener<?> bean)`
 >
-> 7. `initMessageSource();`47
+> 7. `initMessageSource();`初始化`MessageSource`组件(做国际化功能，消息绑定，消息解析)
+>
+>    1. `beanFactory = getBeanFactory();` 获取`BeanFactory`
+>
+>    2. `beanFactory.containsLocalBean(MESSAGE_SOURCE_BEAN_NAME)`看容器中是否有id为`messageSource`的组件，如果有赋值给`beanFactory`的`messageSource`属性,如果没有则创建一个
+>
+>       `DelegatingMessageSource`对象
+>
+> 8. `initApplicationEventMulticaster();`初始化事件派发器
+>
+>    1. `beanFactory = getBeanFactory();`获取`beanFactory`
+>    2. 判断是否能从`BeanFactory`中获取id为`applicationEventMulticaster`的`ApplicationEventMulticaster`，如果没有则创建 一个`SimpleApplicationEventMulticaster`，并注册到`BeanFactory`中 。
+>
+> 9. `onRefresh();`留给子类，默认什么都不做，让子类重写这个方法，在容器刷新时自定义逻辑
+>
+> 10. `registerListeners();`给容器中注册所有定义的`ApplicationListener`
+>
+>     1. 从容器中拿到所有实现`ApplicationListener`的监听器名字放在`String[]`中
+>     2. 将每个监听器添加到事件派发器中 `getApplicationEventMulticaster().addApplicationListenerBean(listenerBeanName);`
+>     3. 派发早期注册的事件
+>
+> 11. `finishBeanFactoryInitialization(beanFactory);`初始化所有的剩下的单实例Bean
+>
+>     1. `beanFactory.preInstantiateSingletons();`
+>
+>        1. 获取容器中的所的Bean，依次进行初始化和创建对象。
+>
+>        2. 获取Bean的定义信息，判断bean是否不是抽象的，是单实例的，不是懒加载的
+>
+>           1. 判断是否是`FactoryBean`的实现类
+>
+>           2. 如果不是`FactoryBean`则用`getBean(beanName)`创建对象
+>
+>              1. 在`getBean(beanName)`中调用`doGetBean(name,null,null,false),`
+>
+>              2. 先判断是否可以从缓存中获取到以前创建的单实例bean，如果能获取到说明这个Bean是之前已经被创建过的，就不需要再创建，直接从缓存中获取
+>
+>              3. 如果缓存中没有，开始Bean的创建对象流程
+>
+>                 1. 标记当前bean已经被创建，防止被多个线程重复创建
+>
+>                 2. 获取Bean的定义信息
+>
+>                 3. 获取当前要创建的Bean所依赖的其他Bean，如果有则按照getBean()将所依赖的Bean先创建出来
+>
+>                 4. 判断要创建的Bean是否是单实例的，是则创建单实例Bean
+>
+>                    1. `createBean(benaName,mbd,args)`
+>
+>                    2. `Object bean = resolveBeforeInstantiation(beanName,mbdToUse)` 让`beanPostProcessor`先提前拦截返回代理对象
+>
+>                       【`InstantiationAwareBeanPostProcessor`】提前执行
+>
+>                       先触发 `postProcessBeforeInstantiation()`
+>
+>                       如果有返回值，触发`postProcessAfterInitialization()`
+>
+>                    3. 如果前面的`InstantiationAwareBeanPostProcessor`没有返回代理对象,调用4
+>
+>                    4. `Object beanInstance = doCreateBean(beanName,mbdToUse,args)`
+>
+>                       1. 创建Bean实例，`createBeanInstance(beanName,mbd,args)` 利用工厂方法或者对象的构造器创建Bean对象
+>
+>                       2. `applyMergedBeanDefinitionPostProcessors(mbd,beanType,beanName)`调用`MergedBeanDefinitionPostProcessor`的后置处理器
+>
+>                       3. `populateBean(beanName,mbd,instanceWrapper)` 为Bean属性赋值,在赋值之前执行一些后置处理器工作
+>
+>                          1. 拿到 `InstantiationAwareBeanPostProcessor`后置处理器执行 `postProcessAfterInstantiation()`
+>                          2. 拿到 `InstantiationAwareBeanPostProcessor`后置处理器执行 `postProcessPropertyValues()`
+>                          3. 应用Bean属性的值，为属性利用setter方法进行赋值 `applyPropertyValues(beanName,mbd,bw,pvs)`
+>
+>                          4`.initializeBean(beanName,exposedObject,mbd)` bean初始化
+>
+>                          1. `invokeAwareMethods(beanName,bean)`执行XXXAware接口的方法
+>                          2. `applyBeanPostProcessorBeforeInitilization(wrappedBean,beanName)` 执行后置处理器初始化之前的方法 `BeanPostProcessor.postProcessorBeforeInitialization()`
+>                          3. `invokeInitMethods(beanName,wrappedBean,mbd)` 执行初始化方法
+>                          4. `applyBeanPostProcessorAfterInitilization(wrappedBean,beanName)` 执行后置处理器初始化之后的方法 `BeanPostProcessor.postProcessorAfterInitialization()`
+>                          5. 注册Bean的销毁方法
+>
+>                    5. 将创建的Bean添加到缓存中singletonObjects,ioc容器就是这些Map,所有Bean都利用getBean创建完成以后，检查所有的Bean是否是`SmartInitializingSingleton`接口的，如果是，执行`afterSingletonInstantiation`()方法
+>
+> 12. `finishRefresh();`完成BeanFactory的初始化创建工作，IOC容器就创建完成，
+>
+>     1. `initLifecycleProcessor();` 初始化和生命周期有关的后置处理器
+>     2. `getLifecycleProcessor().onRefresh()`;获取前面定义的生命周期处理喊叫，回调onRefresh()
+>     3. `publishEvent(new ContextRefreshedEvent(this))`;发布容器刷新完成事件
+>     4. `LiveBeansView.registerApplicationContext(this);`
+
+### 15.1 IOC创建总结
+
+> 1. Spring容器在启动的时候，先会保存所有注册进行的Bean定义信息
+>
+>    * xml注册bean
+>    * 注解注册bean:`@Componment,@Bean,@Service`
+>
+> 2. Spring容器会在适合的时机创建这些Bean
+>
+>    * 用到这个Bean的时候，利用getBean()创建，创建好以后就保存在容器中
+>    * 统一创建剩下的所有单实例bean
+>
+> 3. 后置处理器
+>
+>    * 每一个bean创建完成，就会使用各种后置处理器进行处理，来增强bean的功能，比如
+>        `AutowiredAnnotationBeanPostProcessor`:处理自动注入
+>
+>    ​              `AnnotationAwareAspectJAutoProxyCreator`:实现AOP功能
+>
+> 4. 事件驱动模型
+>
+>    * `ApplicationListener` :事件监听
+>    * `ApplicaitonEventMulticaster`:事件派发
 
 ```java
 @Override
@@ -1162,3 +1272,35 @@ public interface ApplicationListener<E extends ApplicationEvent> extends EventLi
             }
 ```
 
+## 16. Servlet3.0注解开发
+
+### 16.1 @WebServlet
+
+> 在servlet3.0以后，我们可以不用再web.xml里面配置servlet，只需要加上`@WebServlet`注解就可以修改该servlet的属性了。web.xml可以配置的servlet属性，在@WebServlet中都可以配置。
+>
+> `@WebServlet`属性列表：
+
+| 属性名         | **类型**       | **描述**                                                     |
+| -------------- | -------------- | ------------------------------------------------------------ |
+| name           | String         | 指定Servlet 的 name 属性，等价于 <servlet-name>。如果没有显式指定，则该 Servlet 的取值即为类的全限定名。 |
+| value          | String[]       | 该属性等价于 urlPatterns 属性。两个属性不能同时使用。        |
+| urlPatterns    | String[]       | 指定一组 Servlet 的 URL 匹配模式。等价于<url-pattern>标签。  |
+| loadOnStartup  | int            | 指定 Servlet 的加载顺序，等价于 <load-on-startup>标签。      |
+| initParams     | WebInitParam[] | 指定一组 Servlet 初始化参数，等价于<init-param>标签。        |
+| asyncSupported | boolean        | 声明 Servlet 是否支持异步操作模式，等价于<async-supported> 标签。 |
+| description    | String         | 该 Servlet 的描述信息，等价于 <description>标签。            |
+| displayName    | String         | 该 Servlet 的显示名，通常配合工具使用，等价于 <display-name>标签。 |
+
+```java
+/**拦截hello请求的Servlet*/
+@WebServlet("/hello")
+public class HelloServlet extends HttpServlet {
+
+    @Override
+    protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+
+        resp.getWriter().write("hello world");
+    }
+```
+
+55
