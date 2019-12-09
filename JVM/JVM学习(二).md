@@ -44,6 +44,23 @@
 >
 > 根据Java虚拟机规范的规定，当方法区无法满足内存分配需求时，将抛出OutOfMemoryError异常。 
 
+#### 1.2.1 元空间
+
+> 方法区也是所有线程共享。主要用于存储类的信息、常量池、方法数据、方法代码等。
+> 方法区是JVM 的规范，永久代（PermGen space）是HotSpot对这种规范的实现。
+>
+> 在 JDK 1.8 中， HotSpot 已经没有 “PermGen space”这个区间了，取而代之的是 Metaspace（元空间）。
+>
+> 元空间的本质和永久代类似，都是对JVM规范中方法区的实现。**不过元空间与永久代之间最大的区别在于：元空间并不在虚拟机中，而是使用本地内存。因此，默认情况下，元空间的大小仅受本地内存限制**，但可以通过以下参数来指定元空间的大小：
+>
+> `-XX:MetaspaceSize 初始空间大小，达到该值就会触发垃圾收集进行类型卸载，同时GC会对该值进行调整：如果释放了大量的空间，就适当降低该值；如果释放了很少的空间，那么在不超过MaxMetaspaceSize时，适当提高该值。`
+> `-XX:MaxMetaspaceSize最大空间，默认是没有限制的。`
+>
+> 除了上面两个指定大小的选项以外，还有两个与 GC 相关的属性：
+>
+> `-XX:MinMetaspaceFreeRatio在GC之后，最小的Metaspace剩余空间容量的百分比，减少为分配空间所导致的垃圾收集`
+> `-XX:MaxMetaspaceFreeRatio在GC之后，最大的Metaspace剩余空间容量的百分比，减少为释放空间所导致的垃圾收集`
+
 ### 1.3 程序计数器(pc)
 
 > **程序计数器（Program Counter Register）是一块较小的内存空间，它的作用可以看做是当前线程所执行的字节码的指令地址。**在虚拟机的概念模型里（仅是概念模型，各种虚拟机可能会通过一些更高效的方式去实现），字节码解释器工作时就是通过改变这个计数器的值来选取下一条需要执行的字节码指令，分支、循环、跳转、异常处理、线程恢复等基础功能都需要依赖这个计数器来完成。
@@ -98,7 +115,9 @@
 > * 使用句柄的方式
 > * 使用直接指针的方式
 
-### 1.10 jcmd 工具的使用
+## 2.  jdk自带工具的使用
+
+### 2.1 jcmd 工具的使用
 
 > jcmd(从JDK1.7开始)被引用进来
 >  * `jcmd pid VM.flags 查看JVM的启动参数`
@@ -110,4 +129,25 @@
 >  * `jcmd pid Thread.print 查看线程的堆栈信息`
 >  * `jcmd pid Gc.heap_dump filename 导出Heap dump文件，导出的文件可以通过jvisualvm查看`
 >  * `jcmd pid VM.system_properties 查看JVM的属性信息`
->  * 69
+>  * `jcmd pid VM.version 查看目标JVM的版本信息`
+
+### 2.2 jstack 工具的使用
+
+> `jstack pid 可以查看或是导出Java应用程序中线程的堆栈信息与 jcmd pid Thread.print 功能相同`
+
+### 2.3 jmc 工具的使用
+
+> 
+
+### 2.4 jhat 工具的使用
+
+> 
+
+### 2.5 jvisualvm工具的使用
+
+> 
+
+### 2.6 jconsole 工具的使用
+
+> 
+
