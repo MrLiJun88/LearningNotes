@@ -260,6 +260,8 @@
 
 ### 1.14 CMS垃圾收集器
 
+![cmsheap.jgp](C:\Users\Administrator\Desktop\笔记\JVM\images\cmsheap.jgp.JPG)
+
 > * CMS(Concurrent Mark Sweep)收集器，**以获取最短回收停顿时间为目标**，多数应用于互联网站或者B/S系统的服务器端上。
 > * CMS是基于“**标记-----清除**”算法实现的，整个过程分为4个步骤
 >   1. 初始标记(CMS initial mark)
@@ -288,7 +290,7 @@
 
 > 1. Inital Mark
 >
->    `这个CMS两次 stop-the-world事件的其中一次，这个阶段的目标是：标记那些直接被GC Root引用或者被年轻代存活对象所引用的所有老年代的对象。`
+>    `这个CMS两次 stop-the-world事件的其中一次，这个阶段的目标是：标记那些直接被GC Root引用或者被年轻代存活对象所引用的所有老年代的对象，相比于第二次收集停顿时间，第一次通常持续时间较短。`
 >
 > 2. Concurrent Mark
 >
@@ -353,10 +355,10 @@
 
 #### 1.16.1 G1收集器的设计目标
 
-> * 与应用线程同时工作，几乎不需要 stop the world(与CMS类似)
-> * 整理剩余空间，不产生内存碎片(CMS只能在Full GC时，用stop the world整理内存碎片)
+> * **与应用线程同时工作，几乎不需要 stop the world(与CMS类似)**
+> * **整理剩余空间，不产生内存碎片**(CMS只能在Full GC时，用stop the world整理内存碎片)
 > * GC停顿更加可控
-> * 不牺牲系统吞吐量
+> * **不牺牲系统吞吐量**
 > * GC不要求额外的内存空间(CMS需要预留空间存储**浮动垃圾**)
 
 #### 1.16.2 G1的设计规划是要替换掉CMS
@@ -366,8 +368,34 @@
 
 #### 1.16.3 G1收集器堆结构
 
+![g1](C:\Users\Administrator\Desktop\笔记\JVM\images\g1.jpg)
+
 > * **heap被划分一个个相等的不连续的内存区域(**regions),每个region都有一个分代的角色：eden,survivor,old
 > * **对每个角色的数量并没有强制的限定**，也就是说对每种分代内存的大小，可以动态变化
 > * **G1最大的特点就是高效的执行回收，优先去执行那些大量对象可回收的区域(region)**
+> * G1使用了gc停顿可预测的模型，来满足用户设定的gc停顿时间，根据用户设定的目标时间，G1会自动地选择哪些region要清除，一次清除多少个region
+> * G1从多个region中复制存活的对象，然后集中放入到一个region中，同时整理、清除内存(**copying收集算法**)
 
-90
+#### 1.16.4 G1 对比 CMS
+
+> * 对比使用 mark-sweep的CMS，**G1使用的是 copying 算法不会造成内存碎片**
+> * 对比 Parallel Scavenge(基于copying)、Parallel Old收集器(基于mark-compact-sweep),**Parallel会对整个区域做整理导致GC停顿会比较长，而G1只是特定地整理几个region。**
+> * G1并非一个实时的收集器，与parallel Scavenge一样，对GC停顿时间的设置并不绝对生效，只是G1有较高的几率保证不超过设定的GC停顿时间。与之前的GC收集器对比，**G1会根据用户设定的GC停顿时间，智能评估哪几个region需要被回收可以满足用户的设定。**
+
+### 1.1.7  G1重要概念
+
+![cmsheap](C:\Users\Administrator\Desktop\笔记\JVM\images\cmsheap.jpg)
+
+> * **分区（Region）**：G1采取了不同的策略来解决并行、串行和CMS收集器的碎片、暂停时间不可控等问题-------**G1将整个堆分成相同大小的分区（Region）**
+> * 每个分区都可以是年轻代也可能是老年代，但是在同一时刻只能属于某个代。**年轻代、幸存区(Survivor)、老年代这些概念还存在，成为逻辑上的概念**，这样方便复用之前分代框架的逻辑。
+> * 在物理上不需要连接，则带来了额外的好处----------**有的分区内垃圾对象特别多，有的分区垃圾对象很少，G1会优先回收垃圾对象特别多的分区**，这样可以花费较少的时间来回收这些分区的垃圾，这也就是**G1名字的由来，即首先收集垃圾最多的分区**。
+> * 依然是在新生代满了的时候，对整个新生代进行回收-------整个新生代中的对象，要么被回收、要么晋升，**至于新生代也采取分区机制的原因，则是因为这样跟老年代的策略统一，方便调整代的大小。**新生代的内存是由一组非连续区域组成，这使得在需要时易调整大小。新生代的垃圾收集器是STW事件的，所有的应用线程都会暂停等待新生代GC的完成，新生代GC是通过多线程的方式去并行完成的。
+> * **G1还是一种带压缩的收集器**，在回收老年代的分区时，是将存活的对象从一个分区拷贝到另一个可用分区，这个拷贝的过程就实现了局部的压缩。
+> * **收集集合（CSet）**：一组可被回收的分区的集合。在CSet中存活的数据会在GC过程中被移动到另一个可用分区，CSet中的分区可以来自eden空间、survivor空间、或者老年代。
+> * **已记忆信息（RSet）**：**RSet记录了其他Region中的对象引用本Region中对象的关系，**属于points-into结构（谁引用了我的对象）。**RSet的价值在于使得垃圾收集器不需要扫描整个堆找到谁引用了当前分区中的对象，只需要扫描RSet即可**。例：Region1和Region3中的对象都引用了Region2中的对象，因此在Region2的RSet中记录了这两个引用。
+> * G1 GC是在points-out的card table之上再加了一层结构来构成points-into RSet:每个region会记录下到底哪些别的region有指向自己的指针，而这些指针分别在哪些card的范围内。
+> * **这个RSet其实是一个hast table**,key是别的region的起始地址，value是一个集合，里面的元素是card table的index。举例来说，如果region A的RSet时有一项key是region B，value里有index为1234的card，它的意思就是region B的card里引用指向region A。所以对region A来说，该RSet记录的是points-into的关系;而card table仍然记录了points-out的关系。
+> * **Snapshot-At-The-Beginning(STAB):STAB是G1 GC在并发标记阶段使用的增量式的标记算法。**
+> * 并发标记是并发多线程的，但并发线程在同一时刻只扫描一个分区(Region)。
+
+94
