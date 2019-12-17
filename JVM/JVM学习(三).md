@@ -409,7 +409,7 @@
 > * **收集集合（CSet）**：一组可被回收的分区的集合。在CSet中存活的数据会在GC过程中被移动到另一个可用分区，CSet中的分区可以来自eden空间、survivor空间、或者老年代; CSet可以在同一时刻拥有这三种分区的角色。
 > * **已记忆信息（RSet）**：**RSet记录了其他Region中的对象引用本Region中对象的关系，**属于points-into结构（谁引用了我的对象）。**RSet的价值在于使得垃圾收集器不需要扫描整个堆找到谁引用了当前分区中的对象，只需要扫描RSet即可**。例：Region1和Region3中的对象都引用了Region2中的对象，因此在Region2的RSet中记录了这两个引用。
 > * G1 GC是在points-out的card table之上再加了一层结构来构成points-into RSet:每个region会记录下到底哪些别的region有指向自己的指针，而这些指针分别在哪些card的范围内。
-> * **这个RSet其实是一个hast table**,key是别的region的起始地址，value是一个集合，里面的元素是card table的index。举例来说，如果region A的RSet时有一项key是region B，value里有index为1234的card，它的意思就是region B的card里引用指向region A。所以对region A来说，该RSet记录的是points-into的关系;而card table仍然记录了points-out的关系。
+> * **这个RSet其实是一个hash table**,key是别的region的起始地址，value是一个集合，里面的元素是card table的index。举例来说，如果region A的RSet时有一项key是region B，value里有index为1234的card，它的意思就是region B的card里引用指向region A。所以对region A来说，该RSet记录的是points-into的关系;而card table仍然记录了points-out的关系。
 > * **Snapshot-At-The-Beginning(STAB):STAB是G1 GC在并发标记阶段使用的增量式的标记算法。**
 > * 并发标记是并发多线程的，但并发线程在同一时刻只扫描一个分区(Region)。
 
@@ -421,9 +421,93 @@
 > * Mixed GC不是Full GC，**它只能回收部分老年代的Region**，如果Mixed GC实在无法跟上程序分配内存的速度，导致老年代填满无法继续进行Mixed GC，就会使用serial Old GC(Full GC)来收集整个GC heap。**所以本质上，G1是不提供Full GC的。**
 > * global concurrent marking 的执行过程类似于CMS，但是不同的是，**在G1 GC中，它主要是为Mixed GC提供标记服务的**，并不是一次GC过程的一个必须环节。
 > * global concurrent marking的执行过程分为四个步骤:
->   1. 初始标记(inital mark ,STW):它标记了从GC Root开始直接可达的对象
->   2. 并发标记(Concurrent Marking):这个阶段从GC Root开始对heap中的对象进行标记，标记线程与应用线程并发执行，并且收集各个Region的存活对象信息
->   3. 重新标记(Remark ,STW)：标记那些在并发标记阶段发生变化的对象，将被回收
->   4. 清理(Cleanup)：清除空Region(没有存活对象的)，加入到free liset中。
->   5. 95 10
+>   1. **初始标记(inital mark ,STW)**:它标记了从GC Root开始直接可达的对象
+>   2. **并发标记(Concurrent Marking)**:这个阶段从GC Root开始对heap中的对象进行标记，**标记线程与应用线程并发执行**，并且收集各个Region的存活对象信息
+>   3. **重新标记(Remark ,STW)**：标记那些在并发标记阶段,即上一阶段发生变化的对象，将被回收。
+>   4. **清理(Cleanup)**：清除空Region(没有存活对象的)，加入到free liset中。
+>   
+>   * 第一阶段 init mark 是共用了Young GC的暂停，这是因为他们可以复用root scan 操作，**所以可以说 global concurrent marking是伴随Young GC而发生的**
+>   * 第四阶段 Cleanup 只是回收了没有存活对象的Region,所以它并不需要STW
 
+#### 1.17.2 G1在运行过程中的主要模式
+
+> * Young GC（不同于CMS,CMS只能用于老年代）
+> * 并发阶段
+> * 混合模式
+> * Full GC (一般G1出现问题时发生)
+> * G1 Young GC 在Eden充满时触发，在回收之后所有之前属于Eden的区块全部变成空白，即不属于任何一个分区(Eden,Survivor,Old)
+
+#### 1.17.3 Mixed GC触发时机
+
+> * **由一些参数控制，另外也控制着哪些老年代Region会被选入CSet(收集集合)**
+> * **G1heapWastePercent(G1堆浪费百分比)**:在global councurrent marking 结束之后，我们可以知道老年代中 regions中有多少空间要被回收，在每次Young GC之后和再次发生Mixed GC之前，会检查垃圾占比是否达到此参数，只有达到了，下次才会发生Mixed GC。
+> * **G1MixedGCLiveThresholdPercent(老年代中region存活对象的百分比)**:old generation region中的存活对象的占比，只有在此参数下之下，才会被选入CSet。
+> * **G1MixedGCCountTarget(G1 Mixed GC执行次数)**:一次 global concurrent marking之后，最多执行地Mixed GC 的次数。
+> * **G1OldCSetRegionThresholdPercent**: 一次Mixed GC中能被选入CSet的最多old generatino region的数量。
+
+|                参数                |                             含义                             |
+| :--------------------------------: | :----------------------------------------------------------: |
+|      -XX:G1HeapRegionSize = n      |                 设置Region 的 大小，并非终值                 |
+|        -XX:MaxGCPauseMillis        |       设置G1收集过程目标时间，默认值200ms,不是硬性条件       |
+|        -XX:G1NewSizePercent        |                    新生代最小值 ，默认5%                     |
+|      -XX:G1MaxNewSizePercent       |                    新生代最大值，默认60%                     |
+|       -XX:ParallenGCThreads        |                   STW期间，并行GC的线程数                    |
+|       -XX:ConcGCThreads = n        |                并发标记阶段，并行执行的线程数                |
+| -XX:InitiatingHeapOccupancyPercent | 设置触发标记周期的Java 堆占用率阈值。默认是45%。这里的Java堆占比指的是non_young__capacity_bytes,包括 old+humongous |
+
+### 1.18 G1收集概览
+
+> * G1算法将堆划分为若干个区域(Region), 它仍然属于分代收集器。不过，这些区域的一部分包含新生代，**新生代的垃圾收集器依然采用暂停所有应用线程的方式(STW)，存活对象拷贝到老年代或者Survivor空间。**老年代也分成很多区域，**G1收集器通过将对象从一个区域复制到另外一个区域，完成了清理工作。**这就意味着，在正常的处理过程中，**G1完成了堆的压缩(至少是部分堆的压缩)，这样也就不会有CMS内存碎片问题的存在了。**
+
+#### 1.18.1 Humongous区域
+
+> * 在G1中，还有一种特殊的区域，叫**Humongous**区域。**如果一个对象占用的空间达到或是超过了分区容量50%以上，G1收集器就认为这是一个巨型对象。这些巨型对象默认直接会被分配在老年代，**但是如果它是一个短期存在的巨型对象，就会对垃圾收集器造成负面影响。为了解决这个问题，**G1划分 一个Humongous区，它用来专门存活巨型对象。如果一个H区装不下一个巨型对象，那么G1会寻找连续的H分区来存储。为了能找到连续的H区，有时间不得不启动Full GC。**
+
+#### 1.18.2 G1 Young GC
+
+> * Young GC 主要是对Eden区进行GC，**它在Eden空间耗尽时会被触发**。在这种情况下,**Eden空间的数据移动到Survivor空间中，如果Survivor空间不够，Eden空间的部分数据会直接晋升到老年代空间**。**Survivor区的数据移到到新Survivor区中，也有部分数据晋升到老年代空间中。最终Eden空间的数据为空**，GC完成工作，应用线程继续执行。
+> * 如果仅仅GC新生代对象，我们如何找到所有的根对象呢？老年代的所有对象都是根么？那这样扫描下来会耗费大量的时间。于是，**G1引进了RSet的概念。它的全称是 Remembared Set,作用是跟踪指向某个heap区内的对象引用。** 
+> * 在 CMS中，也有RSet的概念，**在老年代中有一块区域用来记录指向新生代的引用**。这是一种point-out,在进行Young GC时，扫描根时，仅仅需要扫描这一块区域，而不需要扫描整个老年代
+> * 但在G1中，并没有使用point-out, 这是由于一个分区太小，分区数量太多，如果使用point-out的话，会造成大量的扫描浪费，有些根本不需要GC的分区引用也扫描了。
+> * 于是G1中使用point-in来解决。point-in 的意思是哪些分区引用了当前分区中的对象。这样，仅仅将这些对象当做根来扫描就避免了无效的扫描。
+> * 由于新生代有多个，那么我们需要在新生代之间记录引用吗？这个不必要的，**原因在于每次GC时，所有新生代都会被扫描，所以只需要记录老年代到新生代之间的引用即可。**
+> * 需要注意的是，如果引用的对象很多，赋值器需要对每个引用做处理，赋值器开销会很大，为了解决赋值器开销这个问题，在G1中又引入了另外一个概念，**卡表(Card Table)**。一个Card Table将一个分区在逻辑上划分为固定大小的连续区域，每个区域称之为卡。卡通常较小，介于128到512字节之间。Card Table通常为字节数组，由Card的索引(即数组下标)来标记每个分区的空间地址。
+> * 默认情况下，每个卡都未被引用。**当一个地址空间被引用时，这个地址空间对应的数组索引的值被标记为'0',即标记为被引用**，此外RSet也将这个数组下标记录下来。一般情况下，这个RSet其实是一个 Hasth Table,Key是别的Region的起始地址，Value是一个集合，里面的元素是Card Table的索引值
+
+#### 1.18.3 G1对于Young GC的阶段
+
+> 1. 根扫描
+>    * 静态和本地对象被扫描
+> 2. 更新RS
+>    * 处理dirty card队列更新RS
+> 3. 处理RS
+>    * 检测从年轻代指向老年代的对象
+> 4. 对象拷贝
+>    * 拷贝存活的对象到survivor/old区域
+> 5. 处理引用队列
+>    * 软引用、弱引用、虚引用处理
+
+### 1.19 再谈Mixed GC
+
+> * **Mixed GC不仅进行正常的新生代垃圾收集，同时也回收部分后台扫描线程标记的老年代分区**
+> * 在G1 GC中，**global concurrent marking 主要是为Mixed GC提供标记服务的，并不是GC过程的一个必须环节**。global concurrent marking 的执行过程分为四个步骤：
+>   1. **初始标记(inital mark ,STW)**:它标记了从GC Root开始直接可达的对象
+>   2. **并发标记(Concurrent Marking)**:这个阶段从GC Root开始对heap中的对象进行标记，**标记线程与应用线程并发执行**，并且收集各个Region的存活对象信息
+>   3. **重新标记(Remark ,STW)**：标记那些在并发标记阶段,即上一阶段发生变化的对象，将被回收。
+>   4. **清理(Cleanup)**：清除空Region(没有存活对象的)，加入到free liset中。
+
+#### 1.19.1 Mixed GC步骤
+
+> 1. 全局并发标记(global concurrent marking)
+> 2. 拷贝存活对象(evacuation)
+
+### 1.20 三色标记算法 
+
+> * 提到并发标记，我们不得不了解**并发标记的三色标记算法。它是描述追踪式回收器的一种有效的方法，利用它可以推演回收器的正确性。**
+> * 我们将对象分成三种类型：
+>
+> 1. 黑色：根对象，或者该对象与它的子对象都被扫描(对象被标记了，且它的所有field也被标记完了)
+> 2. 灰色：对象本身被扫描，但还没有扫描完该对象中的子对象(它的field还没有被标记或标记完)
+> 3. 白色：未被扫描的对象，扫描完成所有对象之后，最终为白色的为不可达对象，即垃圾对象(对象没有被标记到)
+
+97
