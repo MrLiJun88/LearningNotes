@@ -70,9 +70,9 @@
 
 > * Select 是前面 I/O 复用模型介绍的标准网络编程 API，可以实现应用程序通过一个阻塞对象监听多路连接请求
 > * Reactor 对象通过 Select 监控客户端请求事件，收到事件后通过 Dispatch 进行分发
-> * 如果是建立连接请求事件，则由 Acceptor 通过 Accept 处理连接请求，然后创建一个 Handler 对象处理连接完成后的后续业务处理
+> * 如果是建立连接请求事件，则由 Acceptor 通过 Accept 处理连接请求，然后创建一个对应的Handler 对象处理连接完成后的后续业务处理
 > * 如果不是建立连接事件，则 Reactor 会分发调用连接对应的 Handler 来响应
-> * Handler 会完成 Read→业务处理→Send 的完整业务流程
+> * **Handler 会完成 Read→业务处理→Send 的完整业务流程**
 >
 > * **优点：模型简单，没有多线程、进程通信、竞争的问题，全部都在一个线程中完成**
 > * **缺点：性能问题，只有一个线程，无法完全发挥多核 CPU 的性能。Handler 在处理某个连接上的业务时，整个进程无法处理其他连接事件，很容易导致性能瓶颈**
@@ -84,10 +84,10 @@
 ##### 2.2.2.2 单Reactor多线程
 
 > * Reactor 对象通过select 监控客户端请求事件, 收到事件后，通过dispatch进行分发
-> * 如果建立连接请求, 则右Acceptor 通过accept 处理连接请求, 然后创建一个Handler对象处理完成连接后的各种事件
+> * 如果建立连接请求, 则右Acceptor 通过accept 处理连接请求, 然后创建一个对应的Handler对象处理完成连接后的各种事件
 > * 如果不是连接请求，则由reactor分发调用连接对应的handler 来处理
-> * **handler 只负责响应事件，不做具体的业务处理,** 通过read 读取数据后，会分发给后面的worker线程池的某个线程处理业务
-> * worker 线程池会分配独立线程完成真正的业务，并将结果返回给handler
+> * **handler 只负责响应事件，不做具体的业务处理, 通过read 读取数据后，会分发给后面的worker线程池的某个线程处理业务**
+> * **worker 线程池会分配独立线程完成真正的业务，并将结果返回给handler**
 > * handler收到响应后，通过send 将结果返回给client
 > * **优点：可以充分的利用多核cpu 的处理能力**
 > * **缺点：多线程数据共享和访问比较复杂， reactor 处理所有的事件的监听和响应，在单线程运行， 在高并发场景容易出现性能瓶颈.**
@@ -120,4 +120,99 @@
 
 ### 2.3 Netty模型
 
-> 49
+> Netty 主要基于主从 Reactors 多线程模型（如图）做了一定的改进，其中主从 Reactor 多线程模型有多个 Reactor
+>
+> 1. Netty抽象出两组线程池 BossGroup 专门负责接收客户端的连接, WorkerGroup 专门负责网络的读写
+> 2. BossGroup 和 WorkerGroup 类型都是 NioEventLoopGroup
+> 3. NioEventLoopGroup 相当于一个事件循环组, 这个组中含有多个事件循环 ，每一个事件循环是 NioEventLoop
+> 4. NioEventLoop 表示一个不断循环的执行处理任务的线程， 每个NioEventLoop 都有一个selector , 用于监听绑定在其上的socket的网络通讯
+> 5. NioEventLoopGroup 可以有多个线程, 即可以含有多个NioEventLoop
+> 6. 每个Boss NioEventLoop 循环执行的步骤有3步
+>    *  轮询accept 事件
+>    * 处理accept 事件 , 与client建立连接 , 生成NioScocketChannel , 并将其注册到某个worker NIOEventLoop 上的 selector 
+>    * 处理任务队列的任务 ， 即 runAllTasks
+> 7. 每个 Worker NIOEventLoop 循环执行的步骤
+>    * 轮询read, write 事件
+>    * 处理i/o事件， 即read , write 事件，在对应NioScocketChannel 处理
+>    * 处理任务队列的任务 ， 即 runAllTasks
+> 8. 每个Worker NIOEventLoop  处理业务时，会使用pipeline(管道), pipeline 中包含了 channel , 即通过pipeline 可以获取到对应通道, 管道中维护了很多的处理器
+
+![image-20191224153629835](C:\Users\Administrator\AppData\Roaming\Typora\typora-user-images\image-20191224153629835.png)
+
+### 2.4 任务队列
+
+> 任务队列中的 Task 有 3 种典型使用场景:
+>
+> * 用户程序自定义的普通任务 ,如下代码
+>
+>   ```java
+>   ctx.channel().eventLoop().execute(() -> {
+>               try {
+>                   Thread.sleep(10 * 1000);
+>               } catch (InterruptedException e) {
+>                   e.printStackTrace();
+>               }
+>               ctx.writeAndFlush(Unpooled.copiedBuffer("hello 我是用户程序自定义的普通任务",CharsetUtil.UTF_8));
+>           });
+>   ```
+>
+> * 用户自定义定时任务
+>
+>   ```java
+>   ctx.channel().eventLoop().schedule(() -> {
+>               try{
+>                   Thread.sleep(10 * 1000);
+>                   ctx.writeAndFlush(Unpooled.copiedBuffer("hello,我是用户自定义定时任务",CharsetUtil.UTF_8));
+>               }
+>               catch (Exception e){
+>                   e.printStackTrace();
+>               }
+>                   },
+>                   5,
+>                   TimeUnit.SECONDS
+>           );
+>   ```
+>
+> * 非当前 Reactor 线程调用 Channel 的各种方法
+>
+> * 例如在推送系统的业务线程里面，根据用户的标识，找到对应的 Channel 引用，然后调用 Write 类方法向该用户推送消息，就会进入到这种场景。最终的 Write 会提交到任务队列中后被异步消费
+
+### 2.5 Netty模型再说明
+
+> * Netty 抽象出两组线程池，BossGroup 专门负责接收客户端连接，WorkerGroup 专门负责网络读写操作。
+> * NioEventLoop 表示一个不断循环执行处理任务的线程，每个 NioEventLoop 都有一个 selector，用于监听绑定在其上的 socket 网络通道。
+> * NioEventLoop 内部采用串行化设计，从消息的读取->解码->处理->编码->发送，始终由 IO 线程 NioEventLoop 负责
+>
+> ​      **NioEventLoopGroup 下包含多个 NioEventLoop**
+>
+> * 每个 NioEventLoop 中包含有一个 Selector，一个 taskQueue
+> * 每个 NioEventLoop 的 Selector 上可以注册监听多个 NioChannel
+> * 每个 NioChannel 只会绑定在唯一的 NioEventLoop 上
+> * 每个 NioChannel 都绑定有一个自己的 ChannelPipeline
+
+## 3. 异步模型
+
+> * 异步的概念和同步相对。当一个异步过程调用发出后，调用者不能立刻得到结果。实际处理这个调用的组件在完成后，通过状态、通知和回调来通知调用者。
+> * Netty 中的 I/O 操作是异步的，包括 Bind、Write、Connect 等操作会简单的返回一个 ChannelFuture。
+> * 调用者并不能立刻获得结果，而是通过 Future-Listener 机制，用户可以方便的主动获取或者通过通知机制获得 IO 操作结果
+> * **Netty 的异步模型是建立在 future 和 callback 的之上的**。callback 就是回调。重点说 Future，它的核心思想是：假设一个方法 fun，计算过程可能非常耗时，等待 fun返回显然不合适。那么可以在调用 fun 的时候，立马返回一个 Future，后续可以通过 Future去监控方法 fun 的处理过程(即 ： Future-Listener 机制)
+
+###  3.1 Future说明
+
+> * 表示异步的执行结果, 可以通过它提供的方法来检测执行是否完成，比如检索计算等等.
+>
+> * ChannelFuture 是一个接口,我们可以添加监听器，当监听的事件发生时，就会通知到监听器.
+>
+>    ```java
+>   public interface ChannelFuture extends Future<Void> {
+>    ```
+>
+> * 在使用 Netty 进行编程时，拦截操作和转换出入栈数据只需要您提供 callback 或利用future 即可。这使得链式操作简单、高效, 并有利于编写可重用的、通用的代码。
+>
+> * Netty 框架的目标就是让你的业务逻辑从网络基础应用编码中分离出来、解脱出来
+
+![image-20191224171326253](C:\Users\Administrator\AppData\Roaming\Typora\typora-user-images\image-20191224171326253.png)
+
+### 3.1 Future-Listener机制
+
+> 52

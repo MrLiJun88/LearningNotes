@@ -351,7 +351,7 @@
 
 > * **G1收集器是一个面向服务端的垃圾收集器，适用于多核处理器、大内存容量的服务端系统**
 > * 它满足短时间gc停顿的同时达到一个较高的吞吐量
-> * JDK7以上版本适合
+> * JDK7以上版本适合,用以替换掉CMS垃圾收集器
 
 #### 1.16.1 G1收集器的设计目标
 
@@ -373,7 +373,7 @@
 > * **heap被划分一个个相等的不连续的内存区域(**regions),每个region都有一个分代的角色：eden,survivor,old
 > * **对每个角色的数量并没有强制的限定**，也就是说对每种分代内存的大小，可以动态变化
 > * **G1最大的特点就是高效的执行回收，优先去执行那些大量对象可回收的区域(region)**
-> * G1使用了gc停顿可预测的模型，来满足用户设定的gc停顿时间，根据用户设定的目标时间，G1会自动地选择哪些region要清除，一次清除多少个region
+> * **G1使用了gc停顿可预测的模型，来满足用户设定的gc停顿时间，根据用户设定的目标时间，G1会自动地选择哪些region要清除，一次清除多少个region**
 > * G1从多个region中复制存活的对象，然后集中放入到一个region中，同时整理、清除内存(**copying收集算法**)
 
 #### 1.16.4 G1 对比 CMS
@@ -409,16 +409,16 @@
 > * **收集集合（CSet）**：一组可被回收的分区的集合。在CSet中存活的数据会在GC过程中被移动到另一个可用分区，CSet中的分区可以来自eden空间、survivor空间、或者老年代; CSet可以在同一时刻拥有这三种分区的角色。
 > * **已记忆信息（RSet）**：**RSet记录了其他Region中的对象引用本Region中对象的关系，**属于points-into结构（谁引用了我的对象）。**RSet的价值在于使得垃圾收集器不需要扫描整个堆找到谁引用了当前分区中的对象，只需要扫描RSet即可**。例：Region1和Region3中的对象都引用了Region2中的对象，因此在Region2的RSet中记录了这两个引用。
 > * G1 GC是在points-out的card table之上再加了一层结构来构成points-into RSet:每个region会记录下到底哪些别的region有指向自己的指针，而这些指针分别在哪些card的范围内。
-> * **这个RSet其实是一个hash table**,key是别的region的起始地址，value是一个集合，里面的元素是card table的index。举例来说，如果region A的RSet时有一项key是region B，value里有index为1234的card，它的意思就是region B的card里引用指向region A。所以对region A来说，该RSet记录的是points-into的关系;而card table仍然记录了points-out的关系。
+> * **这个RSet其实是一个hash table,key是别的region的起始地址，value是一个集合**，里面的元素是card table的index。举例来说，如果region A的RSet时有一项key是region B，value里有index为1234的card，它的意思就是region B的card里引用指向region A。所以对region A来说，该RSet记录的是points-into的关系;而card table仍然记录了points-out的关系。
 > * **Snapshot-At-The-Beginning(STAB):STAB是G1 GC在并发标记阶段使用的增量式的标记算法。**
 > * 并发标记是并发多线程的，但并发线程在同一时刻只扫描一个分区(Region)。
 
 #### 1.17.1 G1 GC模式
 
 > * G1提供了两种GC模式，**Young GC和Mixed GC，两种都是完全Stop The World的**
-> * Young GC:选定所有年轻代里的Region。通过控制年轻代的Region个数，即年轻代内存大小来控制 Young GC的时间开销。
-> * Mixed GC：选定所有年轻代里的Region，外加根据 global concurrent marking 统计得出收集收益高的若干老年代的Region.在用户指定的开销目标范围内尽可能选择收益高的老年代Region
-> * Mixed GC不是Full GC，**它只能回收部分老年代的Region**，如果Mixed GC实在无法跟上程序分配内存的速度，导致老年代填满无法继续进行Mixed GC，就会使用serial Old GC(Full GC)来收集整个GC heap。**所以本质上，G1是不提供Full GC的。**
+> * Young GC:**选定所有年轻代里的Region。通过控制年轻代的Region个数，即年轻代内存大小来控制 Young GC的时间开销。**
+> * Mixed GC：**选定所有年轻代里的Region，外加根据 global concurrent marking 统计得出收集收益高的若干老年代的Region**.在用户指定的开销目标范围内尽可能选择收益高的老年代Region
+> * **Mixed GC不是Full GC，它只能回收部分老年代的Region**，如果Mixed GC实在无法跟上程序分配内存的速度，导致老年代填满无法继续进行Mixed GC，就会使用serial Old GC(Full GC)来收集整个GC heap。**所以本质上，G1是不提供Full GC的。**
 > * global concurrent marking 的执行过程类似于CMS，但是不同的是，**在G1 GC中，它主要是为Mixed GC提供标记服务的**，并不是一次GC过程的一个必须环节。
 > * **global concurrent marking的执行过程分为四个步骤:**
 >   
@@ -558,7 +558,7 @@
 
 > **STAB(Snapshot-At-The-Beginning)初始时期的快照**,它有三个步骤:
 >
-> 1. 在开始标记的时候生成一个快照图，标记存活对象
+> 1. **在开始标记的时候生成一个快照图，标记存活对象**
 > 2. 在并发标记的时候所有被改变的对象入队(**在 write barrier 里把所有旧的引用所指向的对象都变成非白的**)
 > 3. 可能存在浮动垃圾，将在下次被收集
 
@@ -582,7 +582,9 @@
 > * **G1给出的解决办法是通过 Write Barrier**。Write Barrier 就是对引用字段进行赋值做了额外处理。通过 Write Barrier就可以了解到哪些引用对象发生了什么样的变化。
 > * **mark的过程就是遍历heap标记live object 的过程**，采用的是三色标记算法，这三种颜色为白色(表示还未访问到)、灰色(访问到但是它用到的引用还没有完全扫描)，黑色(访问到而且其用到的引用已经完全扫描完)
 > * **整个三色标记算法就是从GC roots出发遍历heap**,针对可达对象先标记白色为灰色，然后再标记灰色为黑色；**遍历完成之后所有可达对象都是黑色的，所有白色都是可以回收的**
-> * SATB仅仅对于在marking开始阶段进行"snapshot"(marked all reachable at mark start),但是并发标记的时候并发修改可能造成对象漏标记
+> * **SATB仅仅对于在marking开始阶段进行"snapshot"(marked all reachable at mark start),但是并发标记的时候并发修改可能造成对象漏标记**
+> * 对于三色算法在并发的时候可能产生的漏标问题，**SATB在标记阶段中，对于从灰色对象移除的目标引用对象标记为灰色，对于黑色引用的新产生的对象标记为黑色；由于是在开始的时候进行快照(snapshot)，因而可能存在浮动垃圾(Floating Garbage)**
+> * 
 
 ### 1.27 并发标记时的漏标场景
 
@@ -590,4 +592,41 @@
 > * 对黑色新引用一个白色对象，然后从灰色对象删了一个引用该白色对象的白色对象，这样也会造成了该白色对象漏标记
 > * 对黑色新引用了一个刚new出来的白色对象，没有其他灰色对象引用该白色对象，这样也会造成了该白色对象漏标记
 
-99
+### 1.28 SATB的漏标与误标
+
+> * 误标没什么关系，顶多造成浮动垃圾，在下次GC还是可以回收的，但是漏标的后果是致命的，把本应该存活的对象给回收了，从而影响的程序的正确性。
+> * **漏标的情况中会发生在白色对象中，且满足以下任意一个条件**
+>   * 并发标记时，应用线程给一个黑色对象的引用类型字段赋值了该白色对象
+>   * 并发标记时，应用线程删除所有灰色对象到该白色对象的引用
+> * 对于第一种情况，利用post-write barrier 记录所有新增的引用关系，然后根据这些引用关系为根重新扫描一遍
+> * 对于第二种情况，利用pre-write barrier,将所有即将被删除的引用关系的旧引用记录下来，最后以这些旧引用为根重新扫描一遍
+
+### 1.29 G1停顿预测模型
+
+> * G1收集器突出表现出来的一 点是**通过一个停顿预测模型根据用户配置的停顿时间来选项CSet的大小，从而达到用户期待的应用程序暂停时间。**
+> * 通过 **-XX:MaxGCPauseMillis**参数来设置。这一点有点类似于ParallelScavenge收集器。关于停顿时间的设置并不是越短越好。
+> * **原因在于设置的时间越短意味着每次收集的CSet越小，导致垃圾逐步积累变多，最终不得不退化成Serial GC**;如果停顿时间设置的过长，那么会导致每次都会产生长时间的停顿，影响了程序对外的响应时间
+
+### 1.30 G1的收集模式
+
+> * Young GC: 收集年轻代里的Region
+> * Mixed GC: 年轻代的所有Region+全局并发标记阶段选出的收益高的Region(Old Region)
+> * 无论是Young GC 还是 Mixed GC都只是并发拷贝的阶段
+> * 分代G1模式下选择CSet有两种模式，分别对应 Young GC和Mixed GC：
+> * Young GC：CSet就是所有年轻代里面的Region
+> * Mixed GC：CSet是所有年轻代里的Region加上全局并发标记阶段标记出来的收益高的Region(Old Region)
+> * **G1的运行过程是这样的：会在Young GC和Mixed GC之间不断地切换运行，同时定期地做全局并发标记，在实在赶不上对象创建速度的情况下使用 Full GC(Serial GC)。**
+> * 初始标记是在 Young GC上执行的，在进行全局并发标记的时候不会做Mixed GC,在做Mixwd GC的时候也不会启动初始标记阶段。
+> * 当Mixed GC 赶不上对象产生的速度的时候就退化成Full GC,这一点是需要重点调优的地方
+
+### 1.31 G1最佳实践
+
+> * 不断调优暂停时间指标
+>   * 通过 -XX:MaxGCPauseMillis=x 可以设置启动应用程序暂停的时间，G1在运行的时候会根据这个参数选择CSet来满足响应时间的设置。一般情况下这个值设置到100ms或者200mx都是可以的(不同情况下会不一样)，但如果设置成50ms就不太合理。暂停时间设置的太短，就会导致出现G1跟不上垃圾产生的速度。最终退化成Full GC。所以对这个参数的调优是一个持续的过程，逐步调整到最佳状态。
+> * 不要设置新生代和老年代的大小
+>   * G1收集器在运行的时候会调整新生代和老年代的大小。通过改变代的大小来调整对象晋升的速度以及晋升年龄，从而达到我们为收集器设置的暂停时间目标。
+>   * 设置了新生代大小相当于放弃了G1为我们做的自动调优。我们需要做的只是设置整个堆内存(新生代+老年代)的大小，剩下的交给G1自己去分配各个代的大小即可。
+> * 关注Evacucation Failure
+>   * Evacuation Failure类似于CMS里面的晋升失败，堆空间的垃圾太多导致无法完成Region之间的拷贝，于是不得不退化成Full GC来做一次全局范围内鬼垃圾收集
+
+101
