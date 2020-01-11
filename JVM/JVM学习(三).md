@@ -243,6 +243,27 @@
 
 ![cmss](C:\Users\Administrator\Desktop\笔记\JVM\images\cmss.JPG)
 
+#### 1.10.7 GC垃圾收集器的JVM参数定义
+
+|             参数              |                             描述                             |
+| :---------------------------: | :----------------------------------------------------------: |
+|          UseSerialGC          | 虚拟机运行在Client模式下的默认值，打开此开关后，使用Serial+Serial Old的收集器组合进行内存回收 |
+|          UseParNewGC          | 打开此开关后，使用ParNew+Serial Old 的收集器组合进行内存回收 |
+|      UseConcMarkSweepGC       | 打开此开关后，使用ParNew+CMS+Serial Old的收集器组合进行内存回收。Serial Old收集器将作为CMS收集器出现 Concurrent Mode Failure失败后的后备收集器使用 |
+|         UseParallelGC         | 虚拟机运行在Server模式下的默认值，打开此开关后，使用Parallel Scavenge+Serial Old(PS MarkSweep)的收集器组合进行内存回收 |
+|       UseParallelOldGC        | 打开此开关后，使用Parallel Scavenge+Parallel Old的收集器组合进行内存回收 |
+|         SurvivorRatio         | 新生代中Eden区域与Survivor区域的容量比值，默认为8，代表Eden:Survivor=8:1 |
+|    PretenureSizeThreshold     | 直接晋升到老年代的对象大小，设置这个参数后，大于这个参数的对象将直接在老年代分配 |
+|     MaxTenuringThreshold      | 晋升到老年代的对象年龄。每个对象在坚持过一次 Minor GC之后，年龄就加1，当超过这个参数值时就进入老年代 |
+|     UseAdaptiveSizePolicy     |      动态调整Java堆中各个区域的大小以及进入老年代的年龄      |
+|    HandlePromotionFailure     | 是否允许分配担保失败，即老年代的剩余空间不足以应付新生代的整个Eden和Survivor区的所有对象都存活的极端情况 |
+|       ParallelGCThreads       |               设置并行GC时进行内存回收的线程数               |
+|         GCTimeRation          | GC时间占总时间的比率，默认为99，即允许1%的GC时间。仅在使用Parallel Scavenge收集器时生效 |
+|       MaxGCPauseMillis        | 设置GC的最大停顿时间。仅在使用Parallel Scavenge收集器时生效  |
+| CMSInitatingOccupancyFraction | 设置CMS收集器在老年代空间被使用多少后触发垃圾收集。默认值为68%，仅在使用CMS收集器时生效 |
+| UseCMSCompactAtFullCollection | 设置CMS收集器在完成垃圾收集后是否要进行一次内存碎片整理。仅在使用CMS收集器时生效 |
+|  CMSFullGCsBeforeCompaction   | 设置CMS收集器在进行若干次垃圾收集后再启动一次内存碎片整理。仅在使用CMS收集器时生效 |
+
 ### 1.11 Java内存泄露
 
 > * **内存泄露是指无用对象（不再使用的对象）持续占有内存或无用对象的内存得不到及时释放，从而造成的内存空间的浪费称为内存泄露**。内存泄露有时不严重且不易察觉，这样开发者就不知道存在内存泄露，但有时也会很严重，会提示你Out of memory。
@@ -512,6 +533,8 @@
 > 5. 处理引用队列
 >    * 软引用、弱引用、虚引用处理
 
+![g1gc](C:\Users\Administrator\Desktop\笔记\JVM\images\g1gc.jpg)
+
 ### 1.19 再谈Mixed GC
 
 > * **Mixed GC不仅进行正常的新生代垃圾收集，同时也回收部分后台扫描线程标记(global current marking)的老年代分区**
@@ -652,4 +675,4 @@
 > * 关注Evacucation(复制) Failure
 >   * Evacuation Failure类似于CMS里面的晋升失败，堆空间的垃圾太多导致无法完成Region之间的拷贝，于是不得不退化成Full GC来做一次全局范围内的垃圾收集
 
-105
+108
