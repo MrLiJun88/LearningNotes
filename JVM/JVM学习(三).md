@@ -675,4 +675,3 @@
 > * 关注Evacucation(复制) Failure
 >   * Evacuation Failure类似于CMS里面的晋升失败，堆空间的垃圾太多导致无法完成Region之间的拷贝，于是不得不退化成Full GC来做一次全局范围内的垃圾收集
 
-108

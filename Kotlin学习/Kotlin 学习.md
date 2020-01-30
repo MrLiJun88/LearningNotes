@@ -49,4 +49,4 @@
 >
 > * CoroutineScope.async{}可以实现与launch builder一样的效果，在后台创建一个新协程，唯一的区别是**它有返回值，因为CoroutineScope.async{}返回的是Deferred类型**。
 
-63
+64
