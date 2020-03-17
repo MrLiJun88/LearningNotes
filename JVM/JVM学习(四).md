@@ -2,7 +2,7 @@
 
 ## 1. Java中的四种引用类型
 
-> 1. Strong Reference(强引用)
+> 1. **Strong Reference(强引用)**
 >
 >    * 我们日常开发中所遇到的绝大多数引用均是强引用
 >
@@ -24,4 +24,34 @@
 >          }
 >      ```
 >
->    * 110
+> 2. **软引用（soft reference）**
+>
+>    * 
+>
+> 3. **弱引用（weak reference）**
+>
+> 4. **虚引用（phantom reference）**
+
+## 2. 其他三种类型的引用
+
+> * Reference抽象类是这些引用的父类
+>
+> * 具体参见Reference类的JavaDoc文件
+>
+> * `ReferenceQueue`
+>
+>   ```java
+>   /**
+>    * Abstract base class for reference objects.  This class defines the
+>    * operations common to all reference objects.  Because reference objects are
+>    * implemented in close cooperation with the garbage collector, this class may
+>    * not be subclassed directly.
+>    *
+>    * @author   Mark Reinhold
+>    * @since    1.2
+>    */
+>   
+>   public abstract class Reference<T> {
+>   ```
+>
+>   
