@@ -52,10 +52,10 @@
 >
 >   * ```javascript
 >     		//下面的两个方法是等价的
->     		function add(number,number1){
+>       		function add(number,number1){
 >                 alert(number + 30)
 >             }
->     
+>       
 >             var add = function(number,number1){
 >                 alert(number + 90)
 >             }
@@ -185,7 +185,7 @@
 >     		var array = new Array();
 >             array.push(1);
 >             alert(array.length);
->     
+>       
 >             var array2 = [1,2,3,4];
 >             alert(array2.length);
 >     ```
@@ -247,10 +247,10 @@
 >               }
 >               return object;
 >           }
->   
+>         
 >           var object1 = createObject();
 >           var object2 = createObject();
->   
+>         
 >           object1.get();
 >           object2.get();
 >   ```
@@ -268,7 +268,7 @@
 >                 }
 >                 return object;
 >             }
->     
+>       
 >             var object1 = createObject("lijun","123");
 >             var object2 = createObject("wangwu","456");
 >     ```
@@ -277,10 +277,10 @@
 >
 >   * ```javascript
 >     		//将方法定义在外面
->     		function get() {
+>       		function get() {
 >                 alert(this.username + " , " + this.password);
 >             }
->     
+>       
 >             function createObject(username,password) {
 >                 var object = new Object();
 >                 object.username = username;
@@ -289,7 +289,7 @@
 >                 object.get = get;
 >                 return object;
 >             }
->     
+>       
 >             var object1 = createObject("lijun","123");
 >             var object2 = createObject("wangwu","456");
 >     ```
@@ -302,7 +302,7 @@
 >               //使用new的方式生成对象时，在第一行代码前，js引擎会为我们生成一个对象
 >               this.username = "lijun";
 >               this.password = "123";
->   
+>         
 >               this.getInfo = function () {
 >                   alert(this.username + " : " + this.password);
 >               }
@@ -320,7 +320,7 @@
 >                 //使用new的方式生成对象时，在第一行代码前，js引擎会为我们生成一个对象
 >                 this.username = username;
 >                 this.password = password;
->     
+>       
 >                 this.getInfo = function () {
 >                     alert(this.username + " : " + this.password);
 >                 }
@@ -336,15 +336,15 @@
 >    		//使用原型方式定义对象,prototype是Object对象中的属性
 >           //所以每个对象都会拥有prototype属性
 >           function Person() {
->   
+>         
 >           }
->   
+>         
 >           Person.prototype.username = "zhangsan";
 >           Person.prototype.password = "kiss";
 >           Person.prototype.getInfo = function () {
 >               alert(this.username + " : " + this.password);
 >           }
->   
+>         
 >           var person1 = new Person();
 >           var person2 = new Person();
 >           person1.username = "lijun"
@@ -378,7 +378,7 @@
 >             person1.password = "84399";
 >             person1.sex = 996;
 >             person1.getInfo();
->     
+>       
 >             person2.username.push("wangwu");
 >             person2.username.push("java");
 >             person2.getInfo();
@@ -403,12 +403,12 @@
 >                     Person.flag = true;
 >                 }
 >             }
->     
+>       
 >             var p1 = new Person();
 >             var p2 = new Person();
 >             p2.username = "lijun";
 >             p2.password = "kiss";
->     
+>       
 >             p1.getInfo();
 >             p2.getInfo();
 >     ```
@@ -425,13 +425,13 @@
 >                   alert(this.username);
 >               }
 >           }
->   
+>     
 >           function Child(username, password) {
 >               //这三行代码是最关键的
 >               this.method = Parent;
 >               this.method(username);
 >               delete this.method;
->   
+>     
 >               this.password = password;
 >               this.sayWorld = function () {
 >                   alert(this.password);
@@ -464,4 +464,119 @@
 >             test.call(object,"hello javascript","hahah");//将object赋给了this
 >     ```
 >
-> * d
+> * 使用call()方法实现继承
+>
+>   * ```java
+>     		function Parent(username) {
+>                 this.username = username;
+>                 this.sayHello = function () {
+>                     alert(this.username);
+>                 }
+>             }
+>       
+>             function Child(username,password) {
+>                 //通过call()继承父类
+>                 Parent.call(this,username);
+>                 this.password = password;
+>                 this.sayWorld = function () {
+>                     alert(this.password)
+>                 }
+>             }
+>       
+>             var parent = new Parent("parent");
+>             var child = new Child("child","kiss");
+>       
+>             parent.sayHello();
+>             //sayHello()是由child从parent继承过来的方法
+>             child.sayHello();
+>             child.sayWorld();
+>     ```
+
+### 9.3  apply方法方式
+
+> * ```javascript
+>   		function Parent(username) {
+>               this.username = username;
+>               this.sayHello = function () {
+>                   alert(this.username);
+>               }
+>           }
+>     
+>           function Child(username,password) {
+>               //apple()第一个参数与call()参数一样
+>               //第二个参数是一个数组对象类型
+>               Parent.apply(this, new Array(username));
+>               this.password = password;
+>               this.sayWorld = function () {
+>                   alert(this.password);
+>               }
+>           }
+>     
+>           var parent = new Parent("parent");
+>           var child = new Child("child","kiss");
+>     
+>           parent.sayHello();
+>           //sayHello()是由child从parent继承过来的方法
+>           child.sayHello();
+>           child.sayWorld();
+>   ```
+
+### 9.4 原型链方式（无法给构造函数传参数）
+
+> * ```javascript
+>   	//使用原型链方式实现对象继承
+>           function Parent() {
+>     
+>           }
+>     
+>           Parent.prototype.hello = "hello";
+>           Parent.prototype.sayHello = function () {
+>               alert(this.hello);
+>           }
+>           //定义子对象
+>           function Child() {
+>     
+>           }
+>           //让子类型的原型指向父类,这样子类就会具有父类的属性和方法
+>           Child.prototype = new Parent();
+>           Child.prototype.world = "world";
+>           Child.prototype.sayWorld = function () {
+>               alert(this.world);
+>           }
+>           var child = new Child();
+>           child.hello = "childHello";
+>           child.sayHello();
+>           child.sayWorld();
+>   ```
+
+### 9.5 混合方式（推荐）
+
+> * ```javascript
+>   		//使用混合方式实现对象继承
+>     		//属性通过对象定义，方法通过原型定义
+>           function Parent(hello) {
+>               this.hello = hello;
+>           }
+>           Parent.prototype.sayHello = function () {
+>               alert(this.hello);
+>           }
+>     
+>           function Child(hello,world) {
+>               //通过call()实现属性的继承
+>               Parent.call(this,hello);
+>               this.world = world;
+>           }
+>           //通过原型方式实现方法的继承
+>           Child.prototype = new Parent();
+>           Child.prototype.sayWorld = function () {
+>               alert(this.world);
+>           }
+>           var child  = new Child("hello","world");
+>     
+>           child.sayHello();
+>           child.sayWorld();
+>   ```
+
+## JSON
+
+> * 

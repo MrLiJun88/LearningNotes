@@ -485,7 +485,6 @@
 >
 >   * 这是一个String->String[]的键值映射。
 >
-> * 
 
 ### 4.6 Servlet终止阶段
 
@@ -531,8 +530,7 @@
 
 ### 6.1 Session概念
 
-> * Session用于跟踪客户的状态。Session指的是在一段时间内，单个客户与Web服务
->   器的一连串相关的交互过程 。 在 一 个Session中，客户可能会多次请求访问同一个网页，也有可能请求访问各种不同的服务器资源
+> * Session用于跟踪客户的状态。Session指的是在一段时间内，单个客户与Web服务器的一连串相关的交互过程 。 在 一 个Session中，客户可能会多次请求访问同一个网页，也有可能请求访问各种不同的服务器资源
 
 ### 6.2 Session的运行机制
 
@@ -572,3 +570,84 @@
 ### 6.5 Session过期 
 
 > * Session过期是指当Session开始后，在一段时间内客户没有和Web服务器交互，这个Session会失效，HttpSession的`setMaxInactiveInterval()`方法可以设置允许Session保持不活动状态的时间（以秒为单位），如果超过这一时间，Session就会失效。
+
+## 7. 过滤器
+
+> * Servlet过滤器是在Java Servlet规范2.3中定义的，它能够对Servlet容器的请求和响应对象进行检查和修改。
+> * **Servlet过滤器本身并不生成请求和响应对象，它只提供过滤作用。**
+> * **Servlet过滤器能够在Servlet被调用之前检查Request对象，修改Request Header和Request内容；**
+> * **在Servlet被调用之后检查Response对象，修改Response Header和Response内容。Servlet过滤器负责过滤的Web组件可以是Servlet、JSP或HTML文件**
+
+### 7.1 过滤器的过滤过程
+
+![image-20200322132813465](C:\Users\Administrator\AppData\Roaming\Typora\typora-user-images\image-20200322132813465.png)
+
+### 7.2 Filter接口
+
+> * 所有的 Servlet 过 滤 器 类 都 必 须 实 现`javax.servlet.Filter`接口。这个接口含有
+>   3个过滤器类必须实现的方法：
+>   * `init()`
+>   * `doFilter()`
+>   * `destroy`
+> * `init(FilterConfig)`：这是Servlet过滤器的初始化方法，Servlet容器创建Servlet过滤器实例后将调用这个方法。**在这个方法中可以读取web.xml 文件中Servlet过滤器的初始化参数**
+> * `doFilter(ServletRequest, ServletResponse,FilterChain)`：这个方法完成实际的过滤操作。**当客户请求访问与过滤器关联的URL时，Servlet容器将先调用过滤器的doFilter方法。FilterChain参数用于访问后续过滤器**
+> * `destroy()`：Servlet容器在销毁过滤器实例前调用该方法，在这个方法中可以释放Servlet过滤器占用的资源
+
+### 7.3 发布Servelt过滤器
+
+> * 发布Servlet过滤器时，必须在web.xml文件中加入<filter>元素和<filter-mapping>元素。<filter>元素用来定义一个过滤器：
+>
+> * ````xml
+>       <filter>
+>           <filter-name>LoginFilter</filter-name>
+>           <filter-class>filter.LoginFilter</filter-class>
+>       </filter>
+>       <filter-mapping>
+>           <filter-name>LoginFilter</filter-name>
+>           <url-pattern>/*</url-pattern>
+>       </filter-mapping>
+>   ````
+
+### 7.4 串联Servlet过滤器工作流程
+
+> ![image-20200323183253476](C:\Users\Administrator\AppData\Roaming\Typora\typora-user-images\image-20200323183253476.png)
+
+### 7.5 配置串联过滤器
+
+> * ```xml
+>   	<filter>
+>           <filter-name>myFilter1</filter-name>
+>           <filter-class>filter.MyFilter1</filter-class>
+>       </filter>
+>       <filter>
+>           <filter-name>myFilter2</filter-name>
+>           <filter-class>filter.MyFilter2</filter-class>
+>       </filter>
+>   
+>       <filter-mapping>
+>           <filter-name>myFilter1</filter-name>
+>           <url-pattern>/InfoServlet</url-pattern>
+>       </filter-mapping>
+>       <filter-mapping>
+>           <filter-name>myFilter2</filter-name>
+>           <url-pattern>/InfoServlet</url-pattern>
+>       </filter-mapping>
+>   ```
+>
+> * 两个串联过滤器的执行结果
+>
+>   * ![image-20200323190002241](C:\Users\Administrator\AppData\Roaming\Typora\typora-user-images\image-20200323190002241.png)
+>
+> * 多个串联过滤器的执行顺序，主要看在web.xml中配置的<filter-mapping>先后顺序
+
+## 8. 监听器
+
+> * Listener是Servlet的监听器，它可以监听客户端的请求、服务端的操作等。通过监听器，可以自动激发一些操作，**比如监听在线的用户的数量。**
+> * 当增加一个HttpSession时，就激发sessionCreated(HttpSessionEvent se)方法，这样就可以给在线人数加1 
+> * **监听器的创建会在Filter(过滤器)之前被创建**
+> * 常用的监听接口有以下几个
+>   * `ServletContextListener`会在ServletContext创建和销毁时触发
+>   * ![image-20200323194809326](C:\Users\Administrator\AppData\Roaming\Typora\typora-user-images\image-20200323194809326.png)
+>   * `ServletContextAttributeListener` 监听对ServletContext属性的操作，比如增加、删除、修改属性
+>   * ![image-20200323200032886](C:\Users\Administrator\AppData\Roaming\Typora\typora-user-images\image-20200323200032886.png)
+>   * 
