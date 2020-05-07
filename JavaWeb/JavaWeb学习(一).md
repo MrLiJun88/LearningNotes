@@ -1,4 +1,4 @@
-# JavaWeb学习
+JavaWeb学习
 
 ## 1. HTTP
 
@@ -37,6 +37,16 @@
 >     `Cache-Control:no=cache (CRLF)`
 >     `(CRLF)`
 >     `username=hello&password=123456`
+
+#### post请求中文乱码问题解决
+
+> * ```java
+>   @Override
+>   protected void doPost(HttpServletRequest req, HttpServletResponse resp) throws ServletException,
+>   IOException {
+>           // 设置请求体的字符集为 UTF-8，从而解决 post 请求的中文乱码问题
+>           req.setCharacterEncoding("UTF-8");
+>   ```
 
 ### 1.4 HTTP响应
 
@@ -415,14 +425,12 @@
 
 > * 如果你的Servlet类扩展了HttpServlet类，你通常不必实现service方法，因为HttpServlet类已经实现了service方法，该方法的声明形式如下:
 >   * ![image-20200309195237376](C:\Users\Administrator\AppData\Roaming\Typora\typora-user-images\image-20200309195237376.png)
-> * 在 HttpServlet 的 service 方 法 中 ， 首先从HttpServletRequest对象中获取HTTP请求方式的信息，然后再根据请求方式调用相应的方法。例如：如果请求方式为GET，那么调用doGet方法；如果请求方式为POST，那么调用doPost方法
+> * 在 HttpServlet 的 service 方 法 中 ， 首先从`HttpServletRequest`对象中获取HTTP请求方式的信息，然后再根据请求方式调用相应的方法。例如：如果请求方式为GET，那么调用doGet方法；如果请求方式为POST，那么调用doPost方法
 
 ### 4.2 ServletRequest
 
-> * ServletRequest接口中封装了客户请求信息，如客户请求方式、参数名和参数值、客户端正在使用的协议,以及发出客户请求的远程主机信息等 。ServletRequest接口还为Servlet提供了直接以二进制
->   方式读取客户请求数据流的ServletInputStream。
-> * ServletRequest的子类可以为Servlet提供更多的和特定协议相关的数据. 例如: HttpServletRequest 提供
->   了读取HTTP Head信息的方法
+> * `ServletRequest`接口中**封装了客户请求信息**，如客户请求方式、参数名和参数值、客户端正在使用的协议,以及发出客户请求的远程主机信息等 。`ServletRequest`接口还为Servlet提供了直接以二进制方式读取客户请求数据流的`ServletInputStream`。
+> * `ServletRequest`的子类可以为Servlet提供更多的和特定协议相关的数据. 例如: `HttpServletRequest` 提供了读取HTTP Head信息的方法
 > * 主要方法
 >   * getAttribute 根据参数给定的属性名返回属性值
 >   * getContentType 返回客户请求数据MIME类型
@@ -433,16 +441,22 @@
 
 ### 4.3 ServletResponse
 
-> * ServletResponse 接口为Servlet提供了返回响应结果的方法。它允许Servlet设置返回数据的长度和MIME
->   类型, 并且提供输出流ServletOutputStream。
-> * ServletResponse子类可以提供更多和特定协议相关的方法。例如: HttpServletResponse 提供设定HTTP
->   HEAD信息的方法。
+> * ServletResponse 接口为Servlet提供了返回响应结果的方法。它允许Servlet设置返回数据的长度和MIME类型, 并且提供输出流ServletOutputStream。
+> * ServletResponse子类可以提供更多和特定协议相关的方法。例如: HttpServletResponse 提供设定HTTP HEAD信息的方法。
 > * 主要方法
 >   * getOutputStream 返回可以向客户端发送二进制数据的输出流对象ServletOutputStream
 >   * getWriter 返回可以向客户端发送字符数据的PrintWriter对象
 >   * getCharacterEncoding 返回Servlet发送的响应数据的字符编码
 >   * getContentType 返回Servlet发送的响应数据的MIME类型
 >   * setContentType 设置Servlet发送的响应数据的MIME类型
+
+#### 4.3.1 响应的乱码解决
+
+> * ```java
+>   // 它会同时设置服务器和客户端都使用 UTF-8 字符集，还设置了响应头
+>   // 此方法一定要在获取流对象之前调用才有效
+>   resp.setContentType("text/html; charset=UTF-8");
+>   ```
 
 ### 4.4 Servlet的生命周期
 
@@ -495,6 +509,30 @@
 > * 当Servlet容器启动Web应用时，并为每个Web应用创建惟一的ServletContext对象。你可以把ServletContext看成是一个Web应用的服务器端组件的共享内存。在ServletContext中可以存放共享数据，它提供了读取或设置共享数据的方法
 >   * setAttribute（String name,Object object）把一个对象和一个属性名绑定，将这个对象存储在ServletContext中。
 >   * getAttribute（String name）根据给定的属性名返回所绑定的对象
+>   
+> * ServletContext的四个作用
+>
+>   1、获取 web.xml 中配置的上下文参数 context-param
+>   2、获取当前的工程路径，格式: /工程路径
+>   3、获取工程部署后在服务器硬盘上的绝对路径
+>   4、像 Map 一样存取数据
+>
+>   * ```java
+>     @Override
+>     	protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+>     		ServletContext context = req.getServletContext();
+>     		//获取 web.xml 中配置的上下文参数 context-param
+>     		System.out.println(context.getInitParameter("hello"));
+>     		//获取当前的工程路径，格式: /工程路径
+>     		String path = context.getContextPath();
+>     		System.out.println(path);
+>     		//获取工程部署后在服务器硬盘上的绝对路径
+>     		String realPath = context.getRealPath("/");
+>     		System.out.println(realPath);
+>     		//像 Map 一样存取数据
+>     		context.setAttribute("hello", "world");
+>     	}
+>     ```
 
 ### 4.8 Servlet的多线程同步问题
 
@@ -503,6 +541,37 @@
 > * 如果在编写Servlet/JSP程序时不注意到多线程同步的问题，这往往造成编写的程序在少量用户访问时没有任何问题，而在并发用户上升到一定值时，就会经常出现一些莫明其妙的问题，对于这类随机性的问题调试难度也很大
 > * **Servlet本身是单实例,多线程的，这样当有多个用户同时访问某个Servlet时，会访问该唯一的Servlet实例中的成员变量，如果对成员变量进行写入操作，那就会导致Servlet的多线程问题，即数据不一致**
 > * 解决Servlet多线程同步问题的最好方案：**去除实例变量，使用局部变量**
+
+### 4.9 ServletConfig类
+
+> * ServletConfig 类从类名上来看，就知道是 Servlet 程序的配置信息类。
+> * Servlet 程序和 ServletConfig 对象都是由 Tomcat 负责创建，我们负责使用。
+> * Servlet 程序默认是第一次访问的时候创建，S**ervletConfig 是每个 Servlet 程序创建时，就创建一个对应的 ServletConfig 对象**
+
+#### 4.9.1 ServletConfig的作用
+
+> * 可以获取 Servlet 程序的别名 servlet-name 的值
+>
+> * 获取初始化参数 init-param
+>
+> * 获取 ServletContext 对象
+>
+> * ```java
+>   @WebServlet(name = "SecondServlet",urlPatterns = {"/SecondServlet"},
+>   initParams = {@WebInitParam(name="hello",value="world"),@WebInitParam(name="lijun",value="java")})
+>   public class SecondServlet extends HttpServlet{
+>   	
+>   	@Override
+>   	public void init(ServletConfig config) throws ServletException {
+>   		//可以获取 Servlet 程序的别名 servlet-name 的值
+>   		System.out.println(config.getServletName());
+>   		//获取初始化参数 init-param
+>   		System.out.println(config.getInitParameter("hello"));
+>   		System.out.println(config.getInitParameter("lijun"));
+>   		//获取 ServletContext 对象
+>   		System.out.println(config.getServletContext());
+>   	}
+>   ```
 
 ## 5. Cookie
 
@@ -623,7 +692,7 @@
 >           <filter-name>myFilter2</filter-name>
 >           <filter-class>filter.MyFilter2</filter-class>
 >       </filter>
->   
+>     
 >       <filter-mapping>
 >           <filter-name>myFilter1</filter-name>
 >           <url-pattern>/InfoServlet</url-pattern>
@@ -650,4 +719,314 @@
 >   * ![image-20200323194809326](C:\Users\Administrator\AppData\Roaming\Typora\typora-user-images\image-20200323194809326.png)
 >   * `ServletContextAttributeListener` 监听对ServletContext属性的操作，比如增加、删除、修改属性
 >   * ![image-20200323200032886](C:\Users\Administrator\AppData\Roaming\Typora\typora-user-images\image-20200323200032886.png)
->   * 
+>   * `HttpSessionListener`监听HttpSession的操作。当创建一个Session时，激发`session Created(HttpSessionEvent se)`方法；当销毁一个Session时，激发`sessionDestroyed (HttpSessionEvent se)`方法
+>   * ![image-20200324133131149](C:\Users\Administrator\AppData\Roaming\Typora\typora-user-images\image-20200324133131149.png)
+>   * `HttpSessionAttributeListener`监听HttpSession中的属性的操作。当在Session增加一个属性时，激发`attributeAdded(HttpSessionBindingEvent se)` 方法；当在Session删除一个属性时，激发`attributeRemoved(HttpSessionBindingEvent se)`方法；当在Session属性被重新设置时，激发`attributeReplaced(HttpSessionBindingEvent se)` 方法
+>   * ![image-20200324134309570](C:\Users\Administrator\AppData\Roaming\Typora\typora-user-images\image-20200324134309570.png)
+
+### 8.1 配置监听器
+
+> * ```xml
+>       <listener>
+>           <listener-class>listener.MyServletContextListener</listener-class>
+>       </listener>
+>       <listener>
+>           <listener-class>listener.MyServletContextAttributeListener</listener-class>
+>       </listener>
+>       <listener>
+>           <listener-class>listener.MyHttpSessionAttributeListener</listener-class>
+>       </listener>
+>   ```
+
+## 9. EL表达式语言
+
+### 9.1 EL内置对象
+
+> * EL 语法很简单，它最大的特点就是使用上很方便  `${sessionScope.user.sex}`
+> * 所有EL都是以 ${ 为起始、以} 为结尾的。上述EL范例的意思是：从Session的范围中，取得用户的性别
+> * EL 提供 . 和 [ ] 两种运算符来存取数据。下列两者所代表的意思是一样的
+>   * `${sessionScope.user.sex}` 等于`${sessionScope.user["sex"]}`
+> * . 和 [ ] 也可以同时混合使用，如下：
+>   * `${sessionScope.shoppingCart[0].price}`回传结果为shoppingCart中第一项物品的价格
+> * 两者差异
+>   * **当要存取的属性名称中包含一些特殊字符，如 . 或 – 等并非字母或数字的符号，就一定要使用 [ ]**，例如：`${user.My-Name }`,应当改为：`${user["My-Name"] }`
+>   * `${sessionScope.user[data]}`此时，data 是一个变量，假若data的值为"sex"时，那上述的例子等于`${sessionScope.user.sex}`；假若data 的值为"name"时，它就等于`${sessionScope.user.name}`。因此，**如果要动态取值时，就可以用上述的方法来做，但 . 无法做到动态取值。**
+
+### 9.2 EL变量
+
+> * EL 存取变量数据的方法很简单，例如：${username}。它的意思是取出某一范围中名称为username的变量。因为我们并没有指定哪一个范围的username，**所以它的默认值会先从Page 范围找，假如找不**
+>   **到，再依序到Request、Session、Application范围。假如途中找到username，就直接回传，不再继续找下去**，但是假如全部的范围都没有找到时，就回传null
+> * ![image-20200324142424663](C:\Users\Administrator\AppData\Roaming\Typora\typora-user-images\image-20200324142424663.png)
+> * **我们也可以指定要取出哪一个范围的变量**
+> * ![image-20200324142457712](C:\Users\Administrator\AppData\Roaming\Typora\typora-user-images\image-20200324142457712.png)
+
+### 9.3 自动类型转换
+
+> * EL 除了提供方便存取变量的语法之外，它另外一个方便的功能就是：自动转变类型
+> * ${param.count + 20}会将传来的count自动转化为数值
+
+### 9.4 EL隐含对象
+
+> * 与范围有关的EL 隐含对象包含以下四个：`pageScope、requestScope、sessionScope 和applicationScope`，它们基本上就和JSP的`pageContext、request、session和applicatio`n一样，不过必须注意的是，这四个隐含对象只能用来取得范围属性值，即JSP中的getAttribute(String name)，却不能取得其他相关信息，例如：JSP中的request对象除可以存取属性之外，还可以取得用户的请求参数或表头信息等等。**但是在EL中，它就只能单纯用来取得对应范围的属性值**，例如：我们要在session 中储存一个属性，它的名称为username，在JSP 中使用`session.getAttribute(“username”)` 来取得username 的值， 但是在EL 中， 则是使用`${sessionScope.username}`来取得其值的
+> * ![image-20200324144015804](C:\Users\Administrator\AppData\Roaming\Typora\typora-user-images\image-20200324144015804.png)
+> * ![image-20200324144054327](C:\Users\Administrator\AppData\Roaming\Typora\typora-user-images\image-20200324144054327.png)
+
+## 10. JSP标签
+
+> * 客户化JSP标签技术是在JSP 1.1版本中才出现的，它支持用户在JSP文件中自定义标签，这样可以使JSP代码更加简洁。
+> * 这些可重用的标签能处理复杂的逻辑运算和事务，或者定义JSP网页的输出内容和格式
+
+### 10.1 创建JSP标签的步骤
+
+> 1. 创建标签的处理类
+> 2. 创建标签库描述文件，**标签库描述文件的后缀名是：.tld**
+> 3. 在JSP文件中引入标签库，然后插入标签，例如:`<mm:hello/>`
+
+### 10.2 自定义标签
+
+> * Servlet容器编译JSP网页时，如果遇到自定义标签，就会调用这个标签的处理类。标签处理类必须扩展以下两个类之一
+>   * `javax.servlet.jsp. tagext .TagSupport`
+>   * `javax.servlet.jsp.tagext.BodyTagSupport`
+> * `doStartTag`    Servlet容器遇到自定义标签的起始标志时调用该方法
+> * `doEndTag`     Servlet容器遇到自定义标签的结束标志时调用该方法
+
+## 11. Servlet3.0新特性
+
+> * 基于注解（Annotation）的配置。
+> * 异步支持（AsyncContext）
+>   * 整页面刷新（meta）
+>   *  Ajax异步请求（轮询，polling）
+>   * 反向Ajax（Comet，长轮询，服务器端推技术：server-side pushing）
+
+### 11.1 通过注解定义Servlet
+
+> * ![image-20200325212346882](C:\Users\Administrator\AppData\Roaming\Typora\typora-user-images\image-20200325212346882.png)
+> * 通过`@WebInitParam`注解来指定初始化参数 
+> * ![image-20200325212706887](C:\Users\Administrator\AppData\Roaming\Typora\typora-user-images\image-20200325212706887.png)
+
+### 11.2 通过注解定义Listener
+
+> * ![image-20200325212824408](C:\Users\Administrator\AppData\Roaming\Typora\typora-user-images\image-20200325212824408.png)
+
+### 11.3 通过注解定义Filter
+
+> * ![image-20200325212843625](C:\Users\Administrator\AppData\Roaming\Typora\typora-user-images\image-20200325212843625.png)
+
+### 11.4 动态注册Servlet
+
+> * ```java
+>   @WebListener()
+>   public class ServletContextListener4Servlet3 implements ServletContextListener {
+>   
+>       @Override
+>       public void contextInitialized(ServletContextEvent sce) {
+>           System.out.println("context init");
+>           //动态注册servlet
+>           ServletContext servletContext = sce.getServletContext();
+>           //将ThirdServlet注册成一个Servlet对象
+>           ServletRegistration.Dynamic thirdServlet = servletContext.addServlet("ThirdServlet", ThirdServlet.class);
+>           //设置thirdServlet的初始参数
+>           thirdServlet.setInitParameter("hello", "world");
+>           //为ThirdServlet设置访问路径
+>           thirdServlet.addMapping("/ThirdServlet");
+>       }
+>   
+>       @Override
+>       public void contextDestroyed(ServletContextEvent sce) {
+>           System.out.println("context destroy");
+>       }
+>   }
+>   ```
+
+### 11.5 文件上传
+
+> * ```jsp
+>    <form action="MyFileUpLoadServlet" method="post" enctype="multipart/form-data">
+>           file:<input type="file" name="myFile"><br>
+>           <input type="submit" value="submit">
+>       </form>
+>   ```
+>
+> * ```java
+>   @WebServlet(name = "MyFileUpLoadServlet",urlPatterns = {"/MyFileUpLoadServlet"})
+>   @MultipartConfig()
+>   public class MyFileUpLoadServlet extends HttpServlet {
+>   
+>       @Override
+>       protected void doPost(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+>   
+>           req.setCharacterEncoding("utf-8");
+>           //获得上传文件对应的信息
+>           Part part = req.getPart("myFile");
+>           //获得请求头信息
+>           String headInfo = part.getHeader("content-disposition");
+>           //获得上传文件的名字
+>           String filename = headInfo.substring(headInfo.lastIndexOf("=") + 2,headInfo.length() - 1);
+>           //将上传的文件写入到指定的位置
+>           part.write( "C:/Users/Administrator/IdeaProjects/JavaWeb01/" + filename);
+>       }
+>   }
+>   ```
+
+### 11.6 使用commons-fileupload.jar实现文件上传
+
+> * commons-fileupload.jar 需要依赖 commons-io.jar 这个包，所以两个包我们都要引入
+>
+> * commons-fileupload.jar 和 commons-io.jar 包中，我们常用的类有哪些？
+>
+> * ```java
+>   ServletFileUpload 类，用于解析上传的数据。
+>       
+>   FileItem 类，表示每一个表单项。
+>       
+>   boolean ServletFileUpload.isMultipartContent(HttpServletRequest request);  判断当前上传的数据格式是否是多段的格式。
+>       
+>   public List<FileItem> parseRequest(HttpServletRequest request)
+>   解析上传的数据
+>       
+>   boolean FileItem.isFormField()
+>   判断当前这个表单项，是否是普通的表单项。还是上传的文件类型。
+>   true 表示普通类型的表单项
+>   false 表示上传的文件类型
+>       
+>   String FileItem.getFieldName()
+>   获取表单项的 name 属性值
+>       
+>   String FileItem.getString()
+>   获取当前表单项的值。
+>       
+>   String FileItem.getName();
+>   获取上传的文件名
+>       
+>   void FileItem.write( file );
+>   将上传的文件写到 参数 file 所指向抽硬盘位置 。 
+>   ```
+
+#### 11.6.1 fileupload 类库的使用：
+
+> * 上传文件的表单
+>
+> * ```jsp
+>   <form action="http://192.168.31.74:8080/09_EL_JSTL/uploadServlet" method="post"
+>   enctype="multipart/form-data">
+>       用户名：<input type="text" name="username" /> <br>
+>       头像：<input type="file" name="photo" > <br>
+>       <input type="submit" value="上传">
+>   </form>
+>   ```
+>
+> * 解析上传的数据的代码：
+>
+> * ```java
+>    @Override
+>       protected void doPost(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+>   
+>           //1 先判断上传的数据是否多段数据（只有是多段的数据，才是文件上传的）
+>           if(ServletFileUpload.isMultipartContent(req)){
+>               //创建 FileItemFactory 工厂实现类
+>               FileItemFactory fileItemFactory = new DiskFileItemFactory();
+>               //创建用于解析上传数据的工具类 ServletFileUpload 类
+>               ServletFileUpload servletFileUpload = new ServletFileUpload(fileItemFactory);
+>               try {
+>                   //解析上传的数据，得到每一个表单项 FileItem
+>                   List<FileItem> list = servletFileUpload.parseRequest(req);
+>                   //循环判断，每一个表单项，是普通类型，还是上传的文件
+>                   for (FileItem item : list){
+>                       if(item.isFormField()){
+>                           //普通表单项
+>                           System.out.println("表单项的 name 属性值：" + item.getFieldName());
+>                           // 参数 UTF-8.解决乱码问题
+>                           System.out.println("表单项的 value 属性值：" + item.getString("UTF-8"));
+>                       }
+>                       else {
+>                           // 上传的文件
+>                           System.out.println("表单项的 name 属性值：" + item.getFieldName());
+>                           System.out.println("上传的文件名：" + item.getName());
+>                           item.write(new File("C:/Users/Administrator/IdeaProjects/JavaWeb01/" + item.getName()));
+>                       }
+>                   }
+>               } catch (Exception e) {
+>                   e.printStackTrace();
+>               }
+>           }
+>       }
+>   ```
+
+### 11.7 文件下载
+
+> * 下载常用的api说明 
+>
+> * `response.getOutputStream();`
+>
+> * `servletContext.getResourceAsStream();`
+>
+> * `servletContext.getMimeType();`
+>
+> * `response.setContentType()`
+>
+> * `response.setHeader("Content-Disposition", "attachment; fileName=1.jpg");`
+>
+>   * **这个响应头告诉浏览器。这是需要下载的。而 attachment 表示附件，也就是下载的一个文件。fileName=后面，表示下载的文件名。完成上面的两个步骤，下载文件是没问题了。但是如果我们要下载的文件是中文名的话。你会发现，下载无法正确显示出正确的中文名。原因是在响应头中，不能包含有中文字符，只能包含 ASCII 码。**
+>
+> * ```java
+>   @Override
+>       protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+>   
+>           //1.获得要下载的文件名
+>           String downloadFileName = "2.jpg";
+>           //2.读取要下载的文件内容
+>           ServletContext servletContext = getServletContext();
+>           //获得要下载的文件类型
+>           String mimeType = servletContext.getMimeType("/upload/" + downloadFileName);
+>           //3.告诉客户端返回的数据类型是什么
+>           resp.setContentType(mimeType);
+>           //4.告诉客户端收到的数据是用于下载的,attachment表示附件形式
+>           resp.setHeader("Content-Disposition", "attachment; filename=" + downloadFileName);
+>           /**
+>            * "/"被服务器解析表示地址为: http:port/工程名/   映射到代码的web目录下
+>            */
+>           InputStream resource = servletContext.getResourceAsStream("/upload/" + downloadFileName);
+>           //获取响应的输出流
+>           OutputStream outputStream = resp.getOutputStream();
+>           //读取输入流中全部的数据，给输出流，回显给客户端
+>           IOUtils.copy(resource,outputStream);
+>       }
+>   ```
+
+#### 11.7.1  解决 IE 和谷歌浏览器的 附件中文乱码
+
+> * ```java
+>   @Override
+>       protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+>   
+>           //1.获得要下载的文件名
+>           String downloadFileName = "2.jpg";
+>           //2.读取要下载的文件内容
+>           ServletContext servletContext = getServletContext();
+>           //获得要下载的文件类型
+>           String mimeType = servletContext.getMimeType("/upload/" + downloadFileName);
+>           //3.告诉客户端返回的数据类型是什么
+>           resp.setContentType(mimeType);
+>           //4.还要告诉客户端收到的数据是用于下载使用（还是使用响应头）
+>           // Content-Disposition响应头，表示收到的数据怎么处理
+>           // attachment表示附件，表示下载使用
+>           // filename= 表示指定下载的文件名
+>           // url编码是把汉字转换成为%xx%xx的格式
+>           if (req.getHeader("User-Agent").contains("Firefox")) {
+>               // 如果是火狐浏览器使用Base64编码
+>               resp.setHeader("Content-Disposition", "attachment; filename==?UTF-8?B?" + new BASE64Encoder().encode("中国.jpg".getBytes("UTF-8")) + "?=");
+>           } else {
+>               // 如果不是火狐，是IE或谷歌，使用URL编码操作
+>               resp.setHeader("Content-Disposition", "attachment; filename=" + URLEncoder.encode("中国.jpg", "UTF-8"));
+>           }
+>           /**
+>            * "/"被服务器解析表示地址为: http:port/工程名/   映射到代码的web目录下
+>            */
+>           InputStream resource = servletContext.getResourceAsStream("/upload/" + downloadFileName);
+>           //获取响应的输出流
+>           OutputStream outputStream = resp.getOutputStream();
+>           //读取输入流中全部的数据，给输出流，回显给客户端
+>           IOUtils.copy(resource,outputStream);
+>       }
+>   ```
+

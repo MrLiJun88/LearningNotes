@@ -1,4 +1,4 @@
-Netty学习(一)
+# Netty学习(一)
 
 ## 1. RMI
 
@@ -254,7 +254,7 @@ Netty学习(一)
 >
 >   * add information
 >
->   * ose the stream
+>   * close the stream
 >
 > * 写数据的逻辑为:
 >
@@ -330,7 +330,7 @@ Netty学习(一)
 ## 8. NIO
 
 > * java.io中最为核心的一个概念是流（Stream），面向流的编程。Java中，一个流要么是输入流，要么是输出流，不可能同时既是输入流又是输出流。
-> * java.nio中拥有三个核心概念：Selector、Channel和Buffer。在 java.nio中，我们是面向块（block）或是缓冲区（buffer）编程的。Buffer本身就是一块内存，底层实现上，它实际上是个数组。数据的读、写都是通过Buffer来实现的。
+> * **java.nio中拥有三个核心概念：Selector、Channel和Buffer。在 java.nio中，我们是面向块（block）或是缓冲区（buffer）编程的**。Buffer本身就是一块内存，底层实现上，它实际上是个数组。数据的读、写都是通过Buffer来实现的。
 > * 除了数组之外，Buffer还提供了对于数据 的结构化访问方式，并且可以追踪到系统的读写过程。
 > * Java中的7种原生数据类型都有各自对应的Buffer类型，如IntBuffer,LongBuffer,ByteBuffer及CharBuffer等,但并没有BooleanBuffer类型。
 > * Channel指的是可以向其写入数据或是从中读取数据的对象，它类似于在java.io中的Stream。
@@ -397,9 +397,11 @@ Netty学习(一)
 >
 > ![image-20200301192923251](C:\Users\Administrator\AppData\Roaming\Typora\typora-user-images\image-20200301192923251.png)
 >
-> * 当文件从hard drive通过DMA copy 方式拷贝到内核缓冲，就不需要再从内核缓存拷贝到socket buffer当中去，而是通过写一份**文件描述符信息(包含 内核缓冲的地址和内核缓存中数据的长度)**到socket buffer当中，所以当协议引擎读取数据的时候，会从两个地方同时读取即(kernel buffer和socket buffer)中读取，而kernel buffer中真正存放数据的地方，socket buffer中描述的是数据存放地方的地址和长度。即这是一种gather操作，实现了真正的零拷贝。
+> * 当文件从hard drive通过DMA copy 方式拷贝到内核缓冲，就不需要再从内核缓存拷贝到socket buffer当中去，而是通过写一份**文件描述符信息(包含 内核缓冲的地址和内核缓存中数据的长度)**到socket buffer当中，所以当协议引擎读取数据的时候，会从两个地方同时读取即(kernel buffer和socket buffer)中读取，而**kernel buffer中真正存放数据的地方，socket buffer中描述的是数据存放的地址和长度。即这是一种gather操作，实现了真正的零拷贝。**
 
 ![image-20200302200639255](C:\Users\Administrator\AppData\Roaming\Typora\typora-user-images\image-20200302200639255.png)
 
-53
+## 11. Reactor模式（反应器模式）
 
+* Netty整体架构是Reactor模式的完整体现。
+* 61
