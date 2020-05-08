@@ -54,3 +54,78 @@
 * 当调用对象的`notify()`方法时，它会随机唤醒该对象等待集合(wait set)中的任意一个线程，当某个线程被唤醒后，它就会与其他线程一同竞争对象的锁。
 * 当调用对象的`notifyAll()`方法时，它会唤醒该对象等待集合(wait set)中的所有线程，这些线程被唤醒后，又会开始竞争对象的锁。
 * 在某一时刻，只有唯一一个线程可以拥有对象的锁。
+
+### 1.5 案例解析
+
+```java
+/**
+  编写一个多线程程序，实现这样一个目标
+  1.存在一个对象，该对象有一个int类型的成员变量counter，该成员变量初始值为0
+  2.创建两个线程，其中一个线程对该对象的成员变量+1，另一个线程对该对象的成员变量-1
+  3.输出该对象成员变量counter每次变化后的值
+  4.最终输出的结果应为：10101010...
+*/
+	private int counter;
+
+    public synchronized void increase() {
+        //说明已经是1了
+        while (1 == counter) {
+            try{
+                /**说明此处counter已经为1
+                 * 需要释放掉锁，让其他线程去减1
+                 */
+                wait();
+            }
+            catch (InterruptedException e){
+                e.printStackTrace();
+            }
+        }
+        //为0，则加1
+        counter++;
+        System.out.println(counter);
+        notify();
+    }
+
+   public synchronized void decrease(){
+        while(0 == counter){
+            try{
+                /**说明此处counter已经为0
+                 * 需要释放掉锁，让其他线程去加1
+                 */
+                wait();
+            }
+            catch (InterruptedException e){
+                e.printStackTrace();
+            }
+        }
+        //为1，则减1
+        counter--;
+       System.out.println(counter);
+       notify();
+   }
+```
+
+## 2. synchronized关键字
+
+* 当一个线程去访问某个对象的`static synchronized`方法时，该线程获取的锁是当前对象对应的`Class`对象锁，这把锁只有一个。
+* 当某个对象里有若干个普通的`synchronized`方法，那么这些普通的`synchronized`方法在某一时刻被多个线程所访问时，只能有其中一个方法被线程调用，因为当一个线程进入到`synchronized`方法时，就会去先获取这个对象的锁。而同一个对象的`synchronized`方法锁的是当前对象的锁，此时只有一份，就必须先等待已经获得对象锁的线程先执行完，才有机会获取锁去执行。
+* 当我们使用`synchronized`来修饰代码块时，字节码层面上是通过`monitorenter`与`monitorexit`指令来实现的锁的获取与释放动作
+* 当线程进入到`monitorenter`指令后，线程将会持有`Monitor`对象，退出`monitorexit`指令后，线程将会释放`Monitor`对象
+* 如下图：程序在进入`synchronized`代码后，从字节码角度是通过`monitorenter`指令标识，而第一个`monitorexit`是代表程序正常退出后的代码块结束，释放掉锁，第二个`monitorexit`是代码当程序执行发生异常后，通过`monitorexit`释放掉锁。
+* ![2](C:\Users\Administrator\Desktop\笔记\Java并发\images\2.JPG)
+* 对于`synchronized`关键字修饰方法来说，并没有出现`monitorenter`与`monitorexit`指令，而是出现了一个`ACC_SYNCHRONIZED`标志，JVM使用了`ACC_SYNCHRONIZED`访问标志来区分一个方法是否为同步方法，当方法被调用时，调用指令会检查该方法是否拥有`ACC_SYNCHRONIZED`标志，如果有，那么执行线程将会先持有方法所在的对象的`Monitor`对象，然后再去执行方法体；在该方法执行期间，其他任何线程均无法再获取到这个`Monitor`对象，当线程执行完该方法后，它会释放掉这个`Monitor`对象，即便在发生异常时，也会释放这个`Monitor`对象
+* ![捕获](C:\Users\Administrator\Desktop\笔记\Java并发\images\捕获.JPG)
+* 当一个执行线程去调用一个`static`的`synchronized`方法时，调用指令会检查该方法是否拥有`ACC_STATIC`和`ACC_SYNCHRONIZED`标志，如果有，那么执行线程将会先持有方法所在的对象的`Class`对象的`Monitor`对象，然后再去执行方法体,**同时`args_size`也会被置为0，因为在`static`方法中不会使用到`this`关键字**
+* ![3](C:\Users\Administrator\Desktop\笔记\Java并发\images\3.JPG)
+
+* JVM中的同步是基于进入与退出监视器对象(管程对象) (`Monitor`)来实现的。每个对象实例都会有一个`Monitor`对象，`Monitor`对象会和Java对象一同创建并销毁。`Monitor`对象是由`C++`来实现的。
+* 当多个线程同时访问一段同步代码块时，这些线程会被放置到一个`EntryList`集合中，处于阻塞状态的线程被放到该集合当中。接下来，当线程获取到对象的`Monitor`时，`Monitor`是依赖于底层操作系统的`mutex lock`来实现互斥的，线程获取`mutex`成功，则会持有该`mutex`，这时其他线程就无法再获取到该`mutex`。
+* 如果线程调用了`wait()`方法，那么该线程就会释放掉所持有的`mutex`,并且该线程会进入到`WaitSet`集合(等待集合)中，等待下一次被其他线程调用相同对象的`notify()`或`notifyAll()`方法，唤醒后则该线程就会从`WaitSet`转到`EntryList`集合中,等待获取到对象的`Monitor`去执行方法体。如果当前线程顺利执行完毕方法，那么它也会释放掉所持有的`mutex`
+
+### 2.1 总结
+
+* 同步锁在这种实现方式当中，因为`Monitor`是依赖于底层操作系统实现的，这样就存在用户态与内核态之间的切换，所以会增加性能开销。通过对象互斥锁的概念来保证共享数据操作的完整性。每个对象都对应一个可称为【互斥锁】的标记，这个标记用于保证在任何时刻，只能一个线程访问该对象。
+* 那些处于`EntryList`与`WaitSet`中的线程均处于阻塞状态，阻塞操作是由操作系统来完成的，在`linux`下是通过`pthread_mutex_lock`函数实现的。线程被阻塞后便会进入到内核调度状态，这会导致系统在用户态与内核态之间来回切换，严重影响锁的性能。
+* 解决上述问题的办法便是自旋。其原理是：当发生对`Monitor`的争用进，若`Owner`(**当前拥有Monitor的线程**)能够在很短的时间内释放掉锁，则那些正在争用线程就可以稍微等待一下(即所谓的自旋)，在`Owner`线程释放锁之后，争用线程可能会立刻获取到锁，从而避免了系统阻塞。不过，当`Owner`运行的时间超过了临界值后，争用线程自旋一段时间后依然无法获取到锁，这时争用线程则会停止自旋而进入到阻塞状态。所以总体的思想是：先自旋，不成功再进行阻塞，尽量降低阻塞的可能性(**尽量避免用户态与内核态之间的切换**)，这对那些执行时间很短的代码块来说有极大的性能提升。显然，自旋在多处理器(多核心)上才有意义。
+
+15
