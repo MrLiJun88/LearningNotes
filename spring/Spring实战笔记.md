@@ -40,7 +40,7 @@ Spring自带了多种类型的应用上下文。下面罗列的几个是你最�
 
 ## 2. Spring配置方案
 
-**尽可能的使用自动配置，显式配置越少越好，当必须要显式配置bean时，推荐使用类型安全并且比XML更加强大的`JavaConfig`。只有在`JavaConfig`中没有同样的实时时，才应该使用XML**
+**尽可能的使用自动配置，显式配置越少越好，当必须要显式配置bean时，推荐使用类型安全并且比XML更加强大的`JavaConfig`。只有在`JavaConfig`中没有同样的实例时，才应该使用XML**
 
 * 在XML中进行显式配置
 * 在Java中进行显式配置
@@ -105,7 +105,7 @@ Spring从两个角度来实现自动化装配:
   * util-命名空间所提供的功能之一就是<util:list>元素
 
   * ```xml
-    			  <util:list id="list">
+    		  <util:list id="list">
                 <value>hello</value>
                 <value>world</value>
             </util:list>

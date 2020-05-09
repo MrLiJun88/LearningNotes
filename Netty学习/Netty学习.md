@@ -403,5 +403,16 @@
 
 ## 11. Reactor模式（反应器模式）
 
-* Netty整体架构是Reactor模式的完整体现。
-* 61
+* `Netty`整体架构是`Reactor`模式的完整体现。
+* ![image-20200509210739160](C:\Users\Administrator\AppData\Roaming\Typora\typora-user-images\image-20200509210739160.png)
+
+### 11.1 Reactor模式的角色构成
+
+* `Reactor`模式一共有5种角色构成
+* `Handle`:句柄或是描述符。本质上表示一种资源，是由操作系统提供的；该资源用于表示一个个的事件，比如说文件描述符，或是针对网络编号中的`Socket`描述符。事件既可以来自于外部，也可以来自于内部；外部事件比如说：客户端的连接请求，客户短发送过来数据等；内部事件比如说：操作系统的定时器事件等。**它本质上就是一个文件描述符，Handle本身是事件产生的发源地**
+* `Synchronous Event Demultiplexer`:同步事件分离器。**它本身是一个系统调用，用于等待事件的发生(事件可能一个，也可能多个)**。调用方在调用它的时候会被阻塞，一直阻塞到同步事件分离器上有事件产生为止。对于`Linux`来说，同步事件分离器指的就是常用的`I/O`多路复用机制，比如说`select、poll、epoll`等。在`Java NIO`领域中，同步事件分离器对应的组件就是`Selector`；对应的阻塞方法就是`select()`方法
+* `Event_Handler`:事件处理器。本身由多个回调方法构成，这些回调方法构成了与应用相关的对于某个事件的反馈机制。`Netty`相比于`Java NIO`来说，在事件处理器这个角色上进行了一个升级，它为我们开发者提供了大量的回调方法，供我们在特定事件产生时实现相应的回调方法进行业务逻辑的处理。 
+* `Conrete Event Handler`:具体事件处理器。是事件处理器的实现，它本身实现了事件处理器所提供的各个回调方法，从而实现了特定于业务的逻辑。它本质上就是我们所编写的一个个的处理器实现。
+* `Initiation Dispatcher`:初始分发器。实际上就是`Reactor`角色。它本身定义了一些规范，这些规范用于控制事件的调度方式，同时又提供了应用进行事件处理器的注册、删除等设施。它本身是整个事件处理器的核心所在。`Initiation Dispatcher`会通过`Synchronous Event Demultiplexer`来等待事件的发生，一旦事件发生，`Initiation Dispatcher`首先会分离出每一个事件，然后调用事件处理器，最后去调用相关的回调方法来处理这些事件
+
+* ![image-20200509201158897](C:\Users\Administrator\AppData\Roaming\Typora\typora-user-images\image-20200509201158897.png)
