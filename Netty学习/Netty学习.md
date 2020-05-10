@@ -416,3 +416,14 @@
 * `Initiation Dispatcher`:初始分发器。实际上就是`Reactor`角色。它本身定义了一些规范，这些规范用于控制事件的调度方式，同时又提供了应用进行事件处理器的注册、删除等设施。它本身是整个事件处理器的核心所在。`Initiation Dispatcher`会通过`Synchronous Event Demultiplexer`来等待事件的发生，一旦事件发生，`Initiation Dispatcher`首先会分离出每一个事件，然后调用事件处理器，最后去调用相关的回调方法来处理这些事件
 
 * ![image-20200509201158897](C:\Users\Administrator\AppData\Roaming\Typora\typora-user-images\image-20200509201158897.png)
+
+### 11.2 Reactor模式的流程
+
+1. 当应用向`Initiation Dispatcher`注册具体的`Conrete Event Handler`(事件处理器)时，应用会标识出该事件处理器希望`Initiation Dispatcher`在某个事件发生时向其通知的该事件，该事件与`Handle`关联
+2. `Initiation Dispatcher`会要求每个事件处理器向其传递内部的`Handle`。该`Handle`就向操作系统标识了事件处理器
+3. 当所有的事件处理器注册完毕后，应用会调用`handle_events()`方法来启动`Initiation Dispatcher`的事件循环。这时，`Initiation Dispatcher`会将每个注册的事件管理器的`Handle`合并起来，并使用同步事件分离器等待这些事件的发生。比如说，`TCP`协议层会使用`select`同步事件分离器操作来等待客户端发送的数据到达连接的`socket handle`上
+4. 当与某个事件源对应的`Handle`变为`ready`状态时，(比如说，`TCP socket`变为读状态时)，同步事件分离器就会通知`Initiation Dispatcher`
+5. `Initiation Dispatcher`会触发事件处理器的回调方法(比如：`channelRead0()`)，从而响应这个处于`ready`状态的`Handle`,当事件发生时，`Initiation Dispatcher`会将被事件源激活的`Handle`作为【`key`】来寻找并分发恰当的事件处理器回调方法
+6. `Initiation Dispatcher`会回调事件处理器的`handle_events()`回调方法来执行特定于应用的功能(开发者自己所编写的功能)，从而响应这个事件。所发生的事件类型可以作为该方法参数并被方法内部使用来执行额外的特定于服务的分离与分发
+
+64
