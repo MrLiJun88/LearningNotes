@@ -306,7 +306,7 @@
 
 * `synchronized`方法或代码块提供了对于每个对象都关联的隐式的`monitor lock`，但是它强制所有的锁的获取与释放都以块结构的方式进行：当获取多个锁时，必须以相反的顺序释放他们，并且所有锁的释放必须在与获取锁相同的作用域中
 
-* 尽管使用`synchronized`方法或代码块使得使用`monitor lock`的编程变得简单了，并且避免了很多常见的涉及到锁操作的错误，但是有时也需要对锁进行更加灵活的操作方式。比如：`Lock`接口的实现允许在不同范围内获取和释放锁，并且允许以任意顺序获取和释放多个锁
+* 尽管使用`synchronized`方法或代码块使得使用`monitor lock`的编程变得简单了，并且避免了很多常见的涉及到锁操作的错误，但是有时也需要对锁进行更加灵活的操作方式。比如：`Lock`接口的实现允许在不**同范围内获取和释放锁，并且允许以任意顺序获取和释放多个锁**
 
 * 使用`Lock`获得了更大的灵活性但也带来了一些注意，因为`Lock`的实现消除了类似于`synchronized`那种模式对于锁的自动获取与释放。通常`Lock`如下用法：
 
@@ -358,10 +358,10 @@
             lock.unlock();
           }
        } 
-  	else {
+    	else {
           // 没有获取到锁时
         }
-  	}
+    	}
   ```
 
 ### 7.3 tryLock(long,TimeUnit)方法
@@ -378,8 +378,9 @@
 
 ### 7.5 newCondition方法
 
-* 返回一个新的`Condition`实例绑定到`Lock`实例上
+* 返回一个新的`Condition`实例绑定到调用者对象的`Lock`实例上
 * 在等待该`condition`之前，`lock`必须被当前线程所持有
+* 对于`Condition.await()`将会自动释放掉锁在等待之前，并且在`wait()`返回之前重新获取该锁
 
 ## 8. Lock与Synchronized区别
 
@@ -388,4 +389,119 @@
 * 锁的释放方式：`Lock`务必通过`unlock()`方法在`finally{}`块中手工释放，`synchronized`是通过`JVM`来释放(无需开发者关注)
 * 锁的具体类型：`Lock`提供了多种，如：公平锁、非公平锁；`synchronized`与前`Lock`均提供了可重入锁
 
-27
+## 9. Condition接口
+
+* 传统上，我们可以通过`synchronized`关键字、`wait()、notify()/notifyAll()`来实现多个线程之间的协调与通信，整个过程都是由`JVM`来帮助我们实现的；开发者无需(也无法)了解底层的实现细节
+* 从`JDK 1.5`开始，并发包提供了`Lock、Condition(await()、singnal()/singnalAll())`来实现多个线程之间的协调与通信，整个过程都是由开发者来控制的，**而且相比于传统的方式，更加灵活，功能也更加强大**
+* `Condition`本质是将`Object monitor`(对象监视器)中的方法`(wait()、notify()、notifyAll())`放置到各种对象当中，**让每个对象有多个`WaitSet`**。通过某个的`Lock`实现的使用将他们组合起来，使用`Lock`替换掉`synchronized`方法和代码块；使用`Condition`替换掉`Object monitor`中的方法
+* `Condition`(叫做条件队列或者条件变量)，提供了一种方式让一个线程去等待直到被其他线程通知(当状态条件变为`true`时)，由于对共享状态信息的访问是能够发生在不同的线程当中，因此它必须要受到并发保护，所以某种`Lock`的实现必须要与`Condition`关联起来。等待条件提供的关键属性是自动释放掉相关联的`Lock`并且暂停当前线程，就像调用`Object.wait()`一样
+* 一个`Condition`实例是绑定到一个`Lock`上，通过使用`newConditon()`去获取`Lock`实例对应的特定的`Condition`实例
+* `Condition`的实现提供的行为和语义可以与`Object monitor`方法是不一样的，例如：确保`signal`的顺序，或者当执行通知时不需要保持锁定
+* 注意：`Condition`实例对象只是一个普通对象，并且也可以用作`synchronized`当中，也具有自己的`Object monitor(wait、notify、notifyAll)`调用
+
+## 10. Condition接口方法
+
+### 10.1 await方法
+
+* `await()`会导致当前线程处于等待直到被其他线程`signal`或者线程中断了
+* 调用`await()`会使与当前`Condition`相关联的`lock`会被自动的释放掉。当前线程将无法进行线程调度了并且处于休眠状态直到如下的四种情况之一发生：
+  1. 其他线程调用当前`Condition`的`signal()`方法并且当前的线程恰好被选择做为唤醒线程
+  2. 其他线程调用当前`Condition`的`signalAll()`方法
+  3. 其他线程中断了当前的线程，并且当前线程支持中断线程挂起
+  4. 虚假唤醒
+* 在上述所以情况下，在`await()`方法返回前，当前线程必须重新获取与当前`Condition`相关联的`Lock`；当线程返回时，必须确保该线程必须持有该`Lock`
+
+### 10.2 awaitUninterruptibly方法
+
+* 导致当前线程等待，直到被signal
+* 调用`awaitUniterruptibly()`会使与当前`Condition`相关联的`lock`会被自动的释放掉。当前线程将无法进行线程调度了并且处于休眠状态直到如下的三种情况之一发生：
+  1. 其他线程调用当前`Condition`的`signal()`方法并且当前的线程恰好被选择做为唤醒线程
+  2. 其他线程调用当前`Condition`的`signalAll()`方法
+  3. 虚假唤醒
+* 在上述所以情况下，在`awaitUniterruptibly()`方法返回前，当前线程必须重新获取与当前`Condition`相关联的`Lock`；当线程返回时，必须确保该线程必须持有该`Lock`
+
+### 10.3 awaitNanos方法
+
+* 导致当线线程等待直到被`signal`或者被中断，或者指定的时间已经超时了
+
+* 调用`awaitNanos()`会使与当前`Condition`相关联的`lock`会被自动的释放掉。当前线程将无法进行线程调度了并且处于休眠状态直到如下的五种情况之一发生：
+
+  1. 其他线程调用当前`Condition`的`signal()`方法并且当前的线程恰好被选择做为唤醒线程
+  2. 其他线程调用当前`Condition`的`signalAll()`方法
+  3. 其他线程中断了当前的线程，并且当前线程支持中断线程挂起
+  4. 指定的等待时机已经超时
+  5. 虚假唤醒
+
+* 在上述所以情况下，在`awaitNanos()`方法返回前，当前线程必须重新获取与当前`Condition`相关联的`Lock`；当线程返回时，必须确保该线程必须持有该`Lock`
+
+* 返回一个近似的纳秒数，代表剩余的时间(指定的超时时间 - 该方法花费的时间);还有可能返回一个小于等于0的数值，代表已经超时了,用法如下：
+
+  * ```java
+    boolean aMethod(long timeout, TimeUnit unit) {
+            long nanos = unit.toNanos(timeout);
+            lock.lock();
+            try {
+              while (!conditionBeingWaitedFor()) {
+                if (nanos <= 0L){
+                  return false;
+                }
+                nanos = theCondition.awaitNanos(nanos);
+              }
+              // ...
+            } finally {
+              lock.unlock();
+            }
+          }
+    }
+    ```
+
+### 10.4 await(long,TimeUnit)方法
+
+* 导致当线线程等待直到被signal或者被中断、或者超出了等待时间
+* 从行为上与`awaitNanos(unit.toNans(time)) > 0`等价
+
+### 10.5 awaitUntil方法
+
+* 导致当线线程等待直到被`signal`或者被中断，或者超出了指定的期限
+
+* 调用`awaitUntil()`会使与当前`Condition`相关联的`lock`会被自动的释放掉。当前线程将无法进行线程调度了并且处于休眠状态直到如下的五种情况之一发生：
+
+  1. 其他线程调用当前`Condition`的`signal()`方法并且当前的线程恰好被选择做为唤醒线程
+  2. 其他线程调用当前`Condition`的`signalAll()`方法
+  3. 其他线程中断了当前的线程，并且当前线程支持中断线程挂起
+  4. 指定的期限已过
+  5. 虚假唤醒
+
+* 返回值代表指定的期限是否已经过去，用法如下：
+
+  * ```java
+    boolean aMethod(Date deadline) {
+            boolean stillWaiting = true;
+            lock.lock();
+            try {
+              while (!conditionBeingWaitedFor()) {
+                if (!stillWaiting){
+                  return false;
+                }
+                stillWaiting = theCondition.awaitUntil(deadline);
+              }
+              // ...
+            } finally {
+              lock.unlock();
+            }
+          }
+    }
+    ```
+
+### 10.6 signal方法
+
+* 唤醒一个等待的线程
+* 如果多个线程在当前`Condition`等待，那么就会选择其中的一个进行唤醒。这个线程在`await()`方法返回前，必须重新获得到`Lock`
+* `signal()`方法当被调用时，实现通常是确保当前的线程要持有与这个`Condition`相关联的`Lock`
+
+### 10.7 signalAll方法
+
+* 唤醒所有的等待线程
+* 有多个线程在当前`Condition`等待时，则它们都会被唤醒。每个线程在`await()`方法返回前，必须重新获得到`Lock`
+
+30
