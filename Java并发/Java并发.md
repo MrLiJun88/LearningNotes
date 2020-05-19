@@ -393,6 +393,7 @@
 
 * 传统上，我们可以通过`synchronized`关键字、`wait()、notify()/notifyAll()`来实现多个线程之间的协调与通信，整个过程都是由`JVM`来帮助我们实现的；开发者无需(也无法)了解底层的实现细节
 * 从`JDK 1.5`开始，并发包提供了`Lock、Condition(await()、singnal()/singnalAll())`来实现多个线程之间的协调与通信，整个过程都是由开发者来控制的，**而且相比于传统的方式，更加灵活，功能也更加强大**
+* `Thread.sleep()`与`await()`(或是`Object的wait()`方法)的本质区别：`sleep()`方法本质上不会释放锁，而`await()`会释放锁，并且在`signal()`后，**还需要重新获得锁才能继续执行**(该行为与`Object的wait()`方法完全一致)
 * `Condition`本质是将`Object monitor`(对象监视器)中的方法`(wait()、notify()、notifyAll())`放置到各种对象当中，**让每个对象有多个`WaitSet`**。通过某个的`Lock`实现的使用将他们组合起来，使用`Lock`替换掉`synchronized`方法和代码块；使用`Condition`替换掉`Object monitor`中的方法
 * `Condition`(叫做条件队列或者条件变量)，提供了一种方式让一个线程去等待直到被其他线程通知(当状态条件变为`true`时)，由于对共享状态信息的访问是能够发生在不同的线程当中，因此它必须要受到并发保护，所以某种`Lock`的实现必须要与`Condition`关联起来。等待条件提供的关键属性是自动释放掉相关联的`Lock`并且暂停当前线程，就像调用`Object.wait()`一样
 * 一个`Condition`实例是绑定到一个`Lock`上，通过使用`newConditon()`去获取`Lock`实例对应的特定的`Condition`实例
@@ -504,4 +505,116 @@
 * 唤醒所有的等待线程
 * 有多个线程在当前`Condition`等待时，则它们都会被唤醒。每个线程在`await()`方法返回前，必须重新获得到`Lock`
 
-30
+### 10.8 案例解析
+
+```java
+package com.njcit.concurrent4;
+
+import java.util.Arrays;
+import java.util.concurrent.locks.Condition;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
+import java.util.stream.IntStream;
+
+/**
+ * @Author LiJun
+ * @Date 2020/5/19 13:40
+ */
+
+public class MyTest4 {
+    public static void main(String[] args) {
+        BoundedContainer container = new BoundedContainer();
+        //放置线程
+        IntStream.range(0,10).forEach(i -> new Thread(() -> {
+            try{
+                container.put("hello" + i);
+            }
+            catch (InterruptedException e){
+                e.printStackTrace();
+            }
+        }).start());
+        //取出线程
+        IntStream.range(0,10).forEach(i -> new Thread(() -> {
+            try{
+                container.take();
+            }
+            catch (InterruptedException e){
+                e.printStackTrace();
+            }
+        }).start());
+    }
+}
+/**定义一个有界容器*/
+class BoundedContainer {
+    private String[] elements = new String[10];
+    private Lock lock = new ReentrantLock();
+    private Condition notEmptyCondition = lock.newCondition();
+    private Condition notFullCondition = lock.newCondition();
+    /**elements数组中已有的元素数量*/
+    private int elementCount;
+    /**放置元素的索引*/
+    private int putIndex;
+    /**取元素的索引*/
+    private int takeIndex;
+
+    /**
+     * 放置元素
+     * @param element 待放置的元素
+     */
+    public void put(String element) throws InterruptedException{
+        lock.lock();
+        try{
+            //数组已满
+            while(elementCount == elements.length){
+                notFullCondition.await();
+            }
+            //放置元素到数组中
+            elements[putIndex] = element;
+            //下一个元素已经到最后的元素
+            if(++putIndex == elements.length){
+                putIndex = 0;
+            }
+            elementCount++;
+            System.out.println("put method: " + Arrays.toString(elements));
+            //发出取元素信号
+            notEmptyCondition.signal();
+        }
+        finally {
+            lock.unlock();
+        }
+    }
+
+    /**
+     * 取出元素
+     * @return
+     */
+    public String take() throws InterruptedException {
+        lock.lock();
+        try{
+            //数组中没有元素
+            while(0 == elementCount){
+                notEmptyCondition.await();
+            }
+            //取出元素
+            String result = elements[takeIndex];
+            //将数组中取出元素的位置设为null
+            elements[takeIndex] = null;
+            //当取元素到数组末尾时
+            if(++takeIndex == elements.length){
+                takeIndex = 0;
+            }
+            elementCount--;
+            System.out.println("take method: " + Arrays.toString(elements));
+            //通知放置元素的线程
+            notFullCondition.signal();
+            return result;
+        }
+        finally {
+            lock.unlock();
+        }
+    }
+}
+```
+
+
+
